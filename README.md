@@ -1,1 +1,1 @@
-# Comp 3411 Operatins Systems
+# Comp 3411 Operating Systems
