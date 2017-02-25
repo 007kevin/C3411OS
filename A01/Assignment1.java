@@ -92,7 +92,7 @@ class Assignment1 {
       Matrix C = A.multiply(B);
       System.out.println("Matrix A");
       System.out.println(A);
-      System.out.println("\n\t+\n");
+      System.out.println("\n\t*\n");
       System.out.println("Matrix B");      
       System.out.println(B);
       System.out.println("\n\t=\n");
