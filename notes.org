@@ -1,0 +1,161 @@
+* Chapter 11 File-System Implementation
+** File-System Structure
+  - basic file system :: issues generic commands to appropriate device drivers
+       | Layered ﬁle system       |
+       | ------------------------ |
+       | application programs     |
+       | file-organization module |
+       | logical file system      |
+       | basic file system        |
+       | I/O control              |
+       | devices                  |
+       v v
+       
+  - file-organization module :: knows about files and their logical blocks
+       as well as physical blocks. This module can translate logical
+       block addresses to phyical blocked addresses. Also provides
+       free-space manager
+       
+  - logical file system :: manages metadata
+    - all file system structure except the actual data (i.e contents of files)
+    - provies directory structure to provide file organization module
+    - maintains file structure via file-control block (inode in UNIX)
+    - responsible for protection and security
+      
+  - file-control block (FCB) :: contains information about the file, including
+       ownership, permissions, and location of file contents.
+       | Typical FCB                                      |
+       | ------------------------------------------------ |
+       | file permissions                                 |
+       | file dates (create, access, write)               |
+       | file owner, group, ACL                           |
+       | file size                                        |
+       | file data blocks or pointers to file data blocks |
+       
+** File-System Implmentation
+   Information in file systems
+   - boot control block :: info needed by system to boot an OS from that volume
+        
+   - volume control block :: contains partition details such as number of blocks
+        in partition, size of blocks, free block-count, free-block
+        pointers, free-FCB count, and FCB pointers.  In UFS called a
+        superblock.  In NTFS caled the master file table
+        
+        
+   The in-memory information is loaded at mount time, updated during
+   file-system operations, and discared at dismount. Several types of
+   structires are involved:
+   - mount table :: in memory infomation about each monuted volume
+                    
+   - system-wide open-file table :: contains a copy of FCB of each open file and
+        other information
+        
+   - per-process open-file table :: contains pointers to appropriate entry in
+        the system-wide open-file table
+        
+   - buffers to hold file-system blocks when being read from disk or written
+     to disk
+     
+   File Creation - application program calls the logical file system
+   where the LFS allocates a new FCB, reads the appropriate directory
+   into memory, updates it with new file name and FCB, and writes it
+   back to disk.
+   
+   Note: UNIX treats a directory exactly the same as a file (includes
+   a "type" field indicating it is a directory
+   
+   Once file is created, it can be used for I/O. open() call passed a
+   file name to the logical file system. First, search done on
+   system-wide open-file table to see if the file is already in use by
+   another process. If not, directory structure is searched for the
+   given file name. Once file is found, the FCB is copied into the
+   system-wide open-file table in memory. This table not only stores
+   the FCB but also tracks the number of processes that have file
+   open.
+   
+   - file descriptor (UNIX), file handle (Windows) :: name given to the entry
+        in the open-file table
+        
+   When file is closed, per-process table entry is removed, and
+   system-wide entry's open count is decremented. When all users that
+   have opened the file close, any updated metadata is copied back to
+   the disk-based directory structure, and system- wide open file
+   table entry is removed.
+   
+** Virtual File Systems
+   Why? To allow and operating system to allow multiple types of file
+   systems to be integrated into a directory structure
+   
+** Directory Implementation
+   Directory-allocation and directory-management algorithms
+   
+   Linear List
+   - Linear list of file names with pointers to the data blocks 
+     
+   Hash Table
+   - Hash table takes a value computed from the file name and return a pointer
+     to the file name in the linear list therefore greatly decreasing
+     the directory search time.
+     
+** Allocation Methods
+   Direct-access nature of disks allows flexibility in the
+   implementation of files.  Main isue is how to allocate space to
+   these files so that disk space is utilized effectively and files
+   can be accessed quickly. Three magor methods of allocating disk
+   space:
+   
+*** Contiguous Allocation
+    Requires each file occupy a set of contiguous blocks on the
+    disk. Disk addresses define a linear ordering on the disk.
+    
+    Has problems in finding space for a new file. Either first-fit or
+    best-fit algorithms are used but can results in external
+    fragmentation.
+    
+    To make efficient use of disk space, modified
+    contiguous-allocation schemes exists. If an amount allocated to a
+    file proves to not be large enough, another chunk of contiguous
+    space, known as *extent* is allocated.
+    
+*** Linked Allocation
+    Solves all problems of contiguous allocation:
+    - Each file is a linked list of disk blocks meaning the disk blocks can be
+      scattered anywhere on disk
+    - Directory contrains pointer to first and last block of the file
+    - Each block contains a pointer to the next block
+      - block is 512 bytes in size, 4 bytes of which are pointers to the 
+        next block thus user sees blocks of 508 bytes
+        
+    _File creation_ Create a new entry in the directory where each
+    directory entry has a pointer to the first disk block of the
+    file. This pointer is initialized to nil to signifiy an empty
+    file. Size field also set to 0. A write will cause the free-space
+    management system to find a free block and this new block is
+    written to and is linked to the end of the file
+    
+    _Disadvantage_
+    - Can be used effectively only for sequential-access files. Inefficient
+      direct access support if underlying structure is linkedin list
+    - 4 bytes out of 512 are for pointers which means 0.78 percent of
+      disk is being used for pointers (Solution: disadvantage of
+      wasted pointer space is to collect blocks into multiples called
+      *clusters* and allocated clusters at a time.)
+    - Too much reliability on pointers being valid. If a bug were to corrupt
+      pointer, wrong data blocks would be retrieved
+
+    - file-allocation table :: An important vairable on linked allocation
+      + Section of disk at beginning of each volume is set aside to contain 
+        the table
+      + Table has one entry for each disk block and is indexed by block number
+      + Directory entry contains the block number of the first block of the file
+      + Table entry indexed by block number contains block number of next block 
+        in the file.
+      + This chain is continued until the last block is reached which has special
+        end-of-file value as table entry
+      + Unused block has table value of 0. Block allocation is simple
+        matter of finding first 0-valued table entry and replacing
+        previous end-of-file value with address of new block. The 0 is
+        then replaced with end-of-file value
+
+*** Indexed Allocation
+      
