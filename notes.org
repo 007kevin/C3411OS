@@ -143,7 +143,7 @@
     - Too much reliability on pointers being valid. If a bug were to corrupt
       pointer, wrong data blocks would be retrieved
 
-    - file-allocation table :: An important vairable on linked allocation
+    - file-allocation table :: An important variation on linked allocation
       + Section of disk at beginning of each volume is set aside to contain 
         the table
       + Table has one entry for each disk block and is indexed by block number
@@ -156,6 +156,70 @@
         matter of finding first 0-valued table entry and replacing
         previous end-of-file value with address of new block. The 0 is
         then replaced with end-of-file value
+      + benefit of this approach is that the FAT table can be cached
+        in memory, greatly improving random access speeds.
 
+        
 *** Indexed Allocation
-      
+    Indexed allocation solves external-fragmentation and
+    size-declaration problem of contiguous allocation. All pointers of
+    a file are brough together in what is known as the *index block*
+    (array of disk-block addresses)
+
+   - Each file has own index block
+   - Directory contains the address of the index block
+   - When file is created, all pointers in index block are set to nil
+   - When ith block is first written, a block is obtained from the
+     free-space manager, and its address is put in the ith index-block
+     entry
+
+   Pros: Supports direct access without suffering from external
+   fragmentation Cons: Suffers from wasted space. Pointer overhead is
+   generally greater than pointer overhead of linked allocation
+
+   _How large should index block be?_
+   - Linked scheme :: link index blocks
+   - Multilevel index :: Variant of linked scheme where first-leve
+        index block to point to a set of second-level index blocks,
+        which in turn point to the file blocks. I.e with 4096-byte
+        blocks, we could store 1024 four-byte pointers in an index
+        block. Two levels of indexes allow 1048576 (1024^2) data
+        blocks and a file size up to 4 GB.
+        
+        
+   Indexed-allocation scheme suffer form some of the same performance problems
+   as does linked allocation. The index block can be cached in memory,
+   but the data blocks may be spread all over a volume
+
+** Performance concerns
+    For any type of access (random or sequential), contiguous allocation
+    requires only once access to get a disk block. We can easily keep the initial
+    memory address of the file in memory and can calculate the other blocks via
+    offset of the initial
+
+    For linked allocation, address of the next block can be kept in memory 
+    and read directly. Although this works fine for sequential access, for direct
+    access, an access to the ith block may require i disk reads.
+
+** Free-Space Management
+   - free-space list :: To keep track of free disk space. Records all
+        free disk blocks. Despite its name, may not be implemented as a list
+
+   - bit vector :: free-space list implemented as bit map or bit vector. 
+                   Each bloack is represented by 1 bit. If block is free,
+                   the bit is 1, if block is allocated, bit is 0.
+                   Cons - inefficient unless entire vector is kept
+                   in memory, but then it takes up more memory as size of
+                   disk increases
+
+   - linked list :: link together all free disk blocks. FAT method incorporates
+                    free-block accounting into the allocation data structure
+
+** Efficieny and Performance
+   - UNIX inodes are preallocated on a volume for efficiency even though 
+     this means an "empty" disk has a percentage of its space list to inodes.
+     However, by preallocation inodes and spreading them across the volume,
+     improve fs performance.
+     Neat - UNIX tries to keep a file's data block near that file's inode block
+     to reduce disk seek time.
+
