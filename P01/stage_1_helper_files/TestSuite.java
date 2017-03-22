@@ -71,9 +71,10 @@ public class TestSuite {
   /********************************************
    * TFSFileSystem
    ********************************************/
-  @Ignore
+  @Test
   public void tfs_mkfs() throws IOException {
-    
+    TFSFileSystem T = new TFSFileSystem();
+    T.debug();
   }
 
   @Ignore

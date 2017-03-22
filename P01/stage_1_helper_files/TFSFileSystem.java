@@ -58,8 +58,25 @@ public class TFSFileSystem
   // Block size is 128 therefore 512*128 = 65535 = 2^16,
   // the required maximum file size for the project
   private static final int tfs_size = 512;
-  private static final int fat_size = tfs_size;
 
+  // Refer to above regarding PCB
+  private static final int fat_size_byte = 8*(tfs_size-(tfs_size/TFSDiskInputOutput.BLOCK_SIZE+
+                                                        (tfs_size%TFSDiskInputOutput.BLOCK_SIZE==0?0:1)));
+  private static final int fat_size_block = fat_size_byte/TFSDiskInputOutput.BLOCK_SIZE+
+    (fat_size_byte%TFSDiskInputOutput.BLOCK_SIZE==0?0:1);
+
+  
+
+  public void debug(){
+    System.out.println(tfs_size);
+    System.out.println(fat_size_byte);
+    System.out.println(fat_size_block);    
+    System.out.println(tfs_size/TFSDiskInputOutput.BLOCK_SIZE+
+                       (tfs_size%TFSDiskInputOutput.BLOCK_SIZE==0?0:1));
+    System.out.println(tfs_size%TFSDiskInputOutput.BLOCK_SIZE==0?0:1);    
+    
+
+  }
   /*
    * TFS Constructor
    */
