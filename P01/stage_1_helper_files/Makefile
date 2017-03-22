@@ -5,7 +5,7 @@ clean:
 
 JAVAC		= javac
 JAVA		= java
-FILE		= testsuite.java
+FILE		= TestSuite.java
 CLASSPATH	= .:/home/local/projects/C3411OS/lib/junit-4.12.jar:/home/local/projects/C3411OS/lib/hamcrest-core-1.3.jar
 
 out: clean

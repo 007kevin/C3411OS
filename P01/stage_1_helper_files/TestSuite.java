@@ -1,14 +1,14 @@
 import java.io.*;
 import java.util.*;
-import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import org.junit.Test;
 import org.junit.Before;
 import org.junit.After;
+import org.junit.Ignore;
 
-public class testsuite {
+public class TestSuite {
   public static final String DBNAME = "TESTDB";
 
   @After
@@ -65,6 +65,42 @@ public class testsuite {
     assertEquals(TFSDiskInputOutput.is_open(), true);
     TFSDiskInputOutput.tfs_dio_close();
     assertEquals(TFSDiskInputOutput.is_open(), false);    
+  }
+
+  /********************************************
+   * TFSFileSystem
+   ********************************************/
+  @Ignore
+  public void tfs_mkfs() throws IOException {
+    
+  }
+
+  @Ignore
+  public void tfs_prrfs() throws IOException {
+    
+  }
+
+  @Ignore
+  public void tfs_exit() throws IOException {
+    
+  }
+  
+  /********************************************
+   * TFSShell
+   ********************************************/
+  @Ignore
+  public void mkfs() throws IOException {
+    
+  }
+  
+  @Ignore
+  public void prrfs() throws IOException {
+    
+  }
+  
+  @Ignore
+  public void exit() throws IOException {
+    
   }
 
 }
