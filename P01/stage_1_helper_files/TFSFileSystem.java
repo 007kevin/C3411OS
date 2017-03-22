@@ -11,7 +11,20 @@ import java.util.*;
   |         |         |                                   |
   +---------+---------+-----------------------------------+
 
-  PCB - 
+  PCB will be in block 0. Holds the following information:
+    int size     - the number of blocks in the file system 
+    int fat_size - the number of index blocks in the FAT table.
+                   values will be from [1, size-(# blocks allocated to hold FAT)-1].
+                   index value 0 can be used as null pointer since it holds the PCB.
+  
+  FAT will be in block 1. Additional blocks may be allocated depending on the size
+  of the table. Data structure to hold block indices will be a hash table where values
+  are keys to other block indices this forming a linked list for sequential blocks
+
+  Free-space allocation:
+    Since the FAT will have to be read from memory anyways, the free-space list
+    can be built when mounting the fs with no additonal cost. As the
+    FAT is read into memory, any null valued entries can be added to the free-space list
 
  ****************************************************/
 
