@@ -27,28 +27,29 @@ public class TestSuite {
    * TFSDiskInputOutput
    ********************************************/
   @Test
-  public void createsFiles() throws IOException {
+  public void test_disk_creation() throws IOException {
+
     assertEquals(TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5),0);
     File f = new File(DBNAME);
     assertEquals(f.length(), 5*128);
   }
 
   @Test
-  public void openFiles() throws IOException {
+  public void test_disk_open() throws IOException {
     TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
     TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
     assertEquals(TFSDiskInputOutput.is_open(), true);
   }
 
   @Test
-  public void getSize() throws IOException {
+  public void test_getting_disk_size() throws IOException {
     TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
     TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
     assertEquals(TFSDiskInputOutput.tfs_dio_get_size(), 5);
   }
 
   @Test
-  public void writeAndReadBlock() throws IOException {
+  public void test_reading_and_writing_block_in_disk() throws IOException {
     TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
     TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
     byte[] testdata = "WRITE THIS TO BLOCK".getBytes();
@@ -59,7 +60,7 @@ public class TestSuite {
   }
 
   @Test
-  public void closeFile() throws IOException {
+  public void test_closing_disk() throws IOException {
     TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
     TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
     assertEquals(TFSDiskInputOutput.is_open(), true);
