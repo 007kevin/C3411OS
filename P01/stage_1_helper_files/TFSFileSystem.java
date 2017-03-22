@@ -44,6 +44,11 @@ import java.util.*;
 
   in total, 4+1+16+1+4+4 = 30 bytes per entry
 
+  Note:
+  The file system is designed so exceptions are handled by the caller all the 
+  way up to the TFSShell class so any thrown exceptions can be handled in once place.
+  Also, the code is more readable without the try-catch clauses
+
  ****************************************************/
 
 public class TFSFileSystem
@@ -53,13 +58,13 @@ public class TFSFileSystem
   // Block size is 128 therefore 512*128 = 65535 = 2^16,
   // the required maximum file size for the project
   private static final int tfs_size = 512;
-  private static final int fat_size = tfs_size -
+  private static final int fat_size = tfs_size;
 
   /*
    * TFS Constructor
    */
 
-  public void TFSFileSystem()
+  public void TFSFileSystem() throws IOException
   {
   }
 
@@ -67,7 +72,7 @@ public class TFSFileSystem
    * TFS API
    */
 
-  public static int tfs_mkfs()
+  public static int tfs_mkfs() throws IOException
   {
     
     return -1;
