@@ -5,6 +5,7 @@ import java.util.*;
 
   Layout of TFS on the hard disk
 
+  0         1...      n..                                 m
   +---------+---------+-----------------------------------+
   |         |         |                                   |
   |   PCB   |   FAT   |   Data Blocks                     |
@@ -22,9 +23,26 @@ import java.util.*;
   are keys to other block indices this forming a linked list for sequential blocks
 
   Free-space allocation:
-    Since the FAT will have to be read from memory anyways, the free-space list
-    can be built when mounting the fs with no additonal cost. As the
-    FAT is read into memory, any null valued entries can be added to the free-space list
+  Since the FAT will have to be read from memory anyways, the free-space list
+  can be built when mounting the fs with no additonal cost. As the
+  FAT is read into memory, any null valued entries can be added to the free-space list
+
+  Data Blocks will hold the files. Directory structure is also included here since
+  directories can be regarded as files. The first block (i.e block n) will be the root 
+  (e.g "/") directory to form a tree structure.
+
+  Each entry in the directory structure will either be a file or directory:
+
+  int      parent_block - index of FAT into the parent directory
+  byte     directory    - 1 if is directory else 0
+  byte[16] name         - name of the entry, limited to 16 characters as per requirement
+  byte     nlength      - length of the name. Max number of chars is 16 which is suitable
+                          for the 8 bits allocated to the byte. If we has used int, then
+                          3 of the 4 bytes allocated would be wasted
+  int      block        - index into the first block in FAT
+  int      size         - size of the file in bytes.
+
+  in total, 4+1+16+1+4+4 = 30 bytes per entry
 
  ****************************************************/
 
@@ -34,7 +52,8 @@ public class TFSFileSystem
 
   // Block size is 128 therefore 512*128 = 65535 = 2^16,
   // the required maximum file size for the project
-  private static final int TFSSize = 512;
+  private static final int tfs_size = 512;
+  private static final int fat_size = tfs_size -
 
   /*
    * TFS Constructor
