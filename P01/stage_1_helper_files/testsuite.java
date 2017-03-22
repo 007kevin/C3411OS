@@ -1,19 +1,70 @@
 import java.io.*;
 import java.util.*;
+import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import org.junit.Test;
+import org.junit.Before;
+import org.junit.After;
 
 public class testsuite {
-  
+  public static final String DBNAME = "TESTDB";
+
+  @After
+  public void cleanup() throws IOException {
+    /* 
+     * DISK CLEANUP ROUTINE
+     */
+    if (TFSDiskInputOutput.is_open())
+      TFSDiskInputOutput.tfs_dio_close();
+    File f = new File(DBNAME);
+    if (f.exists())
+      f.delete();
+  }
+
+  /********************************************
+   * TFSDiskInputOutput
+   ********************************************/
   @Test
   public void createsFiles() throws IOException {
-    TFSDiskInputOutput IO = new TFSDiskInputOutput();
-    String name = "TESTDB";
-    assertEquals(IO.tfs_dio_create(name.getBytes(), name.length(), 5),0);
-    File f = new File(name);
+    assertEquals(TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5),0);
+    File f = new File(DBNAME);
     assertEquals(f.length(), 5*128);
-    f.delete();
   }
-  
+
+  @Test
+  public void openFiles() throws IOException {
+    TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
+    TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
+    assertEquals(TFSDiskInputOutput.is_open(), true);
+  }
+
+  @Test
+  public void getSize() throws IOException {
+    TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
+    TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
+    assertEquals(TFSDiskInputOutput.tfs_dio_get_size(), 5);
+  }
+
+  @Test
+  public void writeAndReadBlock() throws IOException {
+    TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
+    TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
+    byte[] testdata = "WRITE THIS TO BLOCK".getBytes();
+    TFSDiskInputOutput.tfs_dio_write_block(0,testdata);
+    byte[] buffer   = new byte[128];
+    TFSDiskInputOutput.tfs_dio_read_block(0,buffer);
+    assertEquals(new String(buffer,0,testdata.length), new String(testdata));
+  }
+
+  @Test
+  public void closeFile() throws IOException {
+    TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5);
+    TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
+    assertEquals(TFSDiskInputOutput.is_open(), true);
+    TFSDiskInputOutput.tfs_dio_close();
+    assertEquals(TFSDiskInputOutput.is_open(), false);    
+  }
+
 }
