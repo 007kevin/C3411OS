@@ -8,7 +8,7 @@ public class TFSDiskInputOutput
    */
 
   // Size of blocks in disk.
-  private static final int BLOCK_SIZE = 128;
+  public static final int BLOCK_SIZE = 128;
   // Pointer to opened file
   private static RandomAccessFile RAF = null;
 
