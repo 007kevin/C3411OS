@@ -41,8 +41,14 @@ import java.util.*;
                           3 of the 4 bytes allocated would be wasted
   int      block        - index into the first block in FAT
   int      size         - size of the file in bytes.
+  byte[2]  padding      - padding to ensure each directory entry is 32 bytes. 
+                          This makes writing/reading data from blocks easier
+                          since exactly 4 entries can fit per block. Don't need to
+                          write complicated algorithm to read/write data entries that
+                          have been split into multiple data blocks
 
-  in total, 4+1+16+1+4+4 = 30 bytes per entry
+
+  in total, 4+1+16+1+4+4+2 = 32 bytes per entry
 
   Note:
   The file system is designed so exceptions are handled by the caller all the 
@@ -55,42 +61,36 @@ public class TFSFileSystem
 {
   private static final String TFSDiskFile = "TFSDiskFile";
 
-  // Block size is 128 therefore 512*128 = 65535 = 2^16,
-  // the required maximum file size for the project
-  private static final int tfs_size = 512;
+  /***************************
+   * Partition Control Block *
+   ***************************/
+  private static final int pcb_root = 0;
+  private static final int pcb_size = 1;
 
-  // Refer to above regarding PCB
-  private static final int fat_size_byte = 8*(tfs_size-(tfs_size/TFSDiskInputOutput.BLOCK_SIZE+
-                                                        (tfs_size%TFSDiskInputOutput.BLOCK_SIZE==0?0:1)));
-  private static final int fat_size_block = fat_size_byte/TFSDiskInputOutput.BLOCK_SIZE+
-    (fat_size_byte%TFSDiskInputOutput.BLOCK_SIZE==0?0:1);
+  // pcb(1) + fat(32) + data blocks(512)
+  // Require 32 blocks for fat because there are 512 data blocks.
+  // Given key value pairs are int, 8 bytes will consist of one fat entry
+  // thus (32*128)/8 = 512
+  private static final int pcb_fs_size = 1+32+512;
+  private static final int pcb_fat_size = 32;
+  private static final int pcb_fat_root = 1;
 
-  
-
-  public void debug(){
-    System.out.println(tfs_size);
-    System.out.println(fat_size_byte);
-    System.out.println(fat_size_block);    
-    System.out.println(tfs_size/TFSDiskInputOutput.BLOCK_SIZE+
-                       (tfs_size%TFSDiskInputOutput.BLOCK_SIZE==0?0:1));
-    System.out.println(tfs_size%TFSDiskInputOutput.BLOCK_SIZE==0?0:1);    
-    
-
-  }
-  /*
-   * TFS Constructor
-   */
-
-  public void TFSFileSystem() throws IOException
-  {
-  }
+  /***************************
+   * File Allocation Table   *
+   ***************************/
+  // integer arrays default to 0 as per Java Language Specification.
+  // 0 indicates a null pointer since block 0 is the PCB
+  private static final int[] fat = new int[pcb_fat_size];
 
   /*
    * TFS API
    */
-
   public static int tfs_mkfs() throws IOException
   {
+    TFSDiskInputOutput.tfs_dio_create(TFSDiskFile.getBytes(),
+                                      TFSDiskFile.length(),
+                                      pcb_fs_size);
+    
     
     return -1;
   }

@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.*;
+import java.lang.reflect.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -9,11 +10,11 @@ import org.junit.After;
 import org.junit.Ignore;
 
 public class TestSuite {
-  public static final String DBNAME = "TESTDB";
+  public static final String DBNAME = "TFSDiskFile";
 
   @After
   public void cleanup() throws IOException {
-    /* 
+    /*
      * DISK CLEANUP ROUTINE
      */
     if (TFSDiskInputOutput.is_open())
@@ -65,7 +66,7 @@ public class TestSuite {
     TFSDiskInputOutput.tfs_dio_open(DBNAME.getBytes(), DBNAME.length());
     assertEquals(TFSDiskInputOutput.is_open(), true);
     TFSDiskInputOutput.tfs_dio_close();
-    assertEquals(TFSDiskInputOutput.is_open(), false);    
+    assertEquals(TFSDiskInputOutput.is_open(), false);
   }
 
   /********************************************
@@ -73,36 +74,37 @@ public class TestSuite {
    ********************************************/
   @Test
   public void tfs_mkfs() throws IOException {
-    TFSFileSystem T = new TFSFileSystem();
-    T.debug();
+    TFSFileSystem.tfs_mkfs();
+    File f = new File(DBNAME);
+    assertEquals(f.exists(),true);
   }
 
   @Ignore
   public void tfs_prrfs() throws IOException {
-    
+
   }
 
   @Ignore
   public void tfs_exit() throws IOException {
-    
+
   }
-  
+
   /********************************************
    * TFSShell
    ********************************************/
   @Ignore
   public void mkfs() throws IOException {
-    
+
   }
-  
+
   @Ignore
   public void prrfs() throws IOException {
-    
+
   }
-  
+
   @Ignore
   public void exit() throws IOException {
-    
+
   }
 
 }
