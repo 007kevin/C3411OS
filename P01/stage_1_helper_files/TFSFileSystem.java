@@ -14,12 +14,19 @@ import java.util.*;
   +---------+---------+-----------------------------------+
 
   PCB will be in block 0. Holds the following information:
-    int pcb_root - the number of blocks in the file system
-    int fat_size - the number of index blocks in the FAT table. values will range
-                   from [0, m-n]. Index value 0 can be used as null pointer since
-                   it will hold the root directory by default (We will assume we
-                   never want to delete the root directory because if we did, there
-                   would be no entry point for the file system when mounting).
+
+    pcb_root            - first block of the PCB
+    pcb_size            - number of blocks allocated to PCB
+    pcb_fs_size         - total number of blocks in the TFS Disk
+    pcb_fat_root        - first block of the FAT
+    pcb_fat_size        - the number of index blocks in the FAT table. values will range  
+                          from [0, m -n]. Index value 0 can be used as null pointer since  
+                          it will hold the root directory by default (We will assume we   
+                          never want to delete the root directory because if we did, there
+                          would be no entry point for the file system when mounting).     
+    pcb_data_block_root - first block of the data block
+    pcb_data_block_size - number of blocks allocated to data blocks
+
 
   FAT will be in block 1. Additional blocks may be allocated depending on the size
   of the table. Data structure to hold block indices will be a hash table (i.e fixed
@@ -53,12 +60,11 @@ import java.util.*;
                           write complicated algorithm to read/write data entries that
                           have been split into multiple data blocks
 
-
-  in total, 4+1+16+1+4+4+2 = 32 bytes per entry
+  in total, 4+1+16+1+4+4+2 = 32 bytes per entry, thus allowing exactly 4 entries per block
 
   Note:
   The file system is designed so exceptions are handled by the caller all the
-  way up to the TFSShell class so any thrown exceptions can be handled in once place.
+  way up to the TFSShell class so any thrown exceptions can be handled in one place.
   Also, the code is more readable without the try-catch clauses
 
  ****************************************************/
@@ -70,29 +76,25 @@ public class TFSFileSystem
   /***************************
    * Partition Control Block *
    ***************************/
-  private static int pcb_root; // 0
-  private static int pcb_size; // 1
+  private static int pcb_root;            // 0
+  private static int pcb_size;            // 1
 
-  // pcb(1) + fat(32) + data blocks(512)
-  // Require 32 blocks for fat because there are 512 data blocks.
-  // Given key value pairs are int, 8 bytes will consist of one fat entry
-  // thus (32*128)/8 = 51
-  private static int pcb_fs_size;     // 1+32+512
-  private static int pcb_fat_size;    // 32
-  private static int pcb_fat_root;    // 1
-
+  // pcb(1) + fat(32) + data blocks(1024)
+  // Require 32 blocks for fat because there are 1024 data blocks.
+  // Given value are int, 4 bytes will consist of one fat entry
+  // thus (32*128)/4 = 1024
+  private static int pcb_fs_size;         // 1+32+1024
+  private static int pcb_fat_root;        // 1  
+  private static int pcb_fat_size;        // 32
+  private static int pcb_data_block_root; // pcb_size+pcb_fat_size
+  private static int pcb_data_block_size; // 1024
+  
   /***************************
    * File Allocation Table   *
    ***************************/
   // integer arrays default to 0 as per Java Language Specification.
   // 0 indicates a null pointer since block 0 is the PCB
-  private static int[] fat;           // new int[pcb_fat_size*BLOCK_SIZE]
-
-  /***************************
-   * Data Blocks             *
-   ***************************/
-  private static int data_block_root; // pcb_size+pcb_fat_size
-  private static int data_block_size; // 512
+  private static int[] fat;               // new int[pcb_fat_size*BLOCK_SIZE]
 
   /***************************
    * Flags                   *
@@ -112,13 +114,13 @@ public class TFSFileSystem
     // especially the # of entries in FAT must match # of data blocks
     pcb_root        = 0;
     pcb_size        = 1;
-    pcb_fs_size     = 1+32+512;
-    pcb_fat_size    = 32;
+    pcb_fs_size     = 1+32+1024;
     pcb_fat_root    = 1;
-                       // default initializes to 0 by Java Lang. Spec
+    pcb_fat_size    = 32;
+    pcb_data_block_root = pcb_size+pcb_fat_size;
+    pcb_data_block_size = 1024;
+                      // default initializes to 0 by Java Lang. Spec
     fat             = new int[pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE];
-    data_block_root = pcb_size+pcb_fat_size;
-    data_block_size = 512;
 
     // Create disk file with default values
     TFSDiskInputOutput.tfs_dio_create(TFSDiskFile.getBytes(),
@@ -127,35 +129,15 @@ public class TFSFileSystem
 
     // Open disk file to read/write
     TFSDiskInputOutput.tfs_dio_open(TFSDiskFile.getBytes(),TFSDiskFile.length());
-
-    // buffer to hold a block of data
-    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
-
+    // set mount flag not utility functions can write to disk
+    fs_mounted = true;
     // Write pcb to disk
-    buffer.putInt(pcb_root);
-    buffer.putInt(pcb_size);
-    buffer.putInt(pcb_fs_size);
-    buffer.putInt(pcb_fat_size);
-    buffer.putInt(pcb_fat_root);
-    TFSDiskInputOutput.tfs_dio_write_block(0,buffer.array());
-
-    // Reset buffer position to beginning
-    buffer.clear();
-
+    _tfs_write_pcb();
     // Write fat to disk
-    // A 128 byte block can hold 16 entries (i.e 128/8)
-    int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/8;
-    for (int i = 0; i < pcb_fat_size; ++i){
-      buffer.clear();
-      for (int j = 0; j < num_entries_per_block; ++j){
-        buffer.putInt(i*num_entries_per_block+j); // add key
-        buffer.putInt(fat[i*num_entries_per_block+j]); // add value, 0 for null pointer
-      }
-      TFSDiskInputOutput.tfs_dio_write_block(i,buffer.array());
-    }
+    _tfs_write_fat();
 
     // Write directory entry into first data block
-    buffer.clear();
+    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);    
     buffer.putInt(0);              // int      parent_block - root is parent to itself
     buffer.put((byte) 1);          // byte     directory    - root is directory
     buffer.put(new byte[16]);      // byte[16] name         - root has no name
@@ -163,15 +145,14 @@ public class TFSFileSystem
     buffer.put((byte) 0);          // int      block        - null pointer
     buffer.put((byte) 0);          // int      size         - root directory is initially empty
     buffer.put(new byte[2]);       // byte[2]  padding  
-
-    TFSDiskInputOutput.tfs_dio_close();
-
+    
+    TFSDiskInputOutput.tfs_dio_close();    
+    fs_mounted = false;
     return 0;
   }
-
+  
   public static int tfs_mount()
   {
-
     return -1;
   }
 
@@ -274,5 +255,50 @@ public class TFSFileSystem
   private static int _tfs_get_block_no_fd(int fd, int offset)
   {
     return -1;
+  }
+
+  /*
+   * PCB related utilities
+   */
+
+  private static void _tfs_write_pcb() throws IOException {
+    if (!fs_mounted)
+      throw new TFSException("Cannot write to PCB. Disk not mounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Cannot write to PCB. Disk not open");    
+    
+    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
+    // Write pcb to disk
+    buffer.putInt(pcb_root);
+    buffer.putInt(pcb_size);
+    buffer.putInt(pcb_fs_size);
+    buffer.putInt(pcb_fat_root);    
+    buffer.putInt(pcb_fat_size);
+    buffer.putInt(pcb_data_block_root);
+    buffer.putInt(pcb_data_block_size);    
+    TFSDiskInputOutput.tfs_dio_write_block(pcb_root,buffer.array());
+  }
+
+  /*
+   * FAT related utilities
+   */
+
+  private static void _tfs_write_fat() throws IOException {
+    if (!fs_mounted)
+      throw new TFSException("Cannot write to PCB. Disk not mounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Cannot write to PCB. Disk not open");    
+
+    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
+    // Write fat to disk
+    // A 128 byte block can hold 32 entries (i.e 128/4)
+    int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/4;
+    for (int i = 0; i < pcb_fat_size; ++i){
+      buffer.clear();
+      for (int j = 0; j < num_entries_per_block; ++j){
+        buffer.putInt(fat[i*num_entries_per_block+j]); // add value, 0 for null pointer
+      }
+      TFSDiskInputOutput.tfs_dio_write_block(pcb_fat_root+i,buffer.array());
+    }
   }
 }

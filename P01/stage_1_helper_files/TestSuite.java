@@ -76,6 +76,41 @@ public class TestSuite {
     TFSFileSystem.tfs_mkfs();
     File f = new File(DBNAME);
     assertEquals(f.exists(),true);
+    RandomAccessFile r = new RandomAccessFile(f,"rw");
+
+    // assert the default values for PCB are correctly written
+    // default values:
+    int pcb_root            = 0;
+    int pcb_size            = 1;
+    int pcb_fs_size         = 1+32+1024;
+    int pcb_fat_root        = 1;
+    int pcb_fat_size        = 32;
+    int pcb_data_block_root = pcb_size+pcb_fat_size;
+    int pcb_data_block_size = 1024;
+
+    int[] values = new int[7];
+    values[0] = pcb_root;
+    values[1] = pcb_size;
+    values[2] = pcb_fs_size;
+    values[3] = pcb_fat_root;
+    values[4] = pcb_fat_size;
+    values[5] = pcb_data_block_root;
+    values[6] = pcb_data_block_size;
+
+    r.seek(pcb_root);
+    for (int i = 0; i < 7; ++i){
+      assertEquals(r.readInt(), values[i]);
+    }
+
+    // assert the default values for FAT are correctly written
+    r.seek(pcb_fat_root);
+    for (int i = 0; i < pcb_data_block_size; ++i){
+      int val = r.readInt();
+      // assertEquals(r.readInt(),(int)0); // values in fat should be 0
+      System.out.println(val);
+    }
+
+
   }
 
   @Ignore
