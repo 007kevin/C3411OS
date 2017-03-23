@@ -14,19 +14,24 @@ import java.util.*;
   +---------+---------+-----------------------------------+
 
   PCB will be in block 0. Holds the following information:
-    int pcb_root     - the number of blocks in the file system
-    int fat_size - the number of index blocks in the FAT table.
-                   values will be from [1, size-(# blocks allocated to hold FAT)-1].
-                   index value 0 can be used as null pointer since it holds the PCB.
+    int pcb_root - the number of blocks in the file system
+    int fat_size - the number of index blocks in the FAT table. values will range
+                   from [0, m-n]. Index value 0 can be used as null pointer since
+                   it will hold the root directory by default (We will assume we
+                   never want to delete the root directory because if we did, there
+                   would be no entry point for the file system when mounting).
 
   FAT will be in block 1. Additional blocks may be allocated depending on the size
-  of the table. Data structure to hold block indices will be a hash table where values
-  are keys to other block indices this forming a linked list for sequential blocks
+  of the table. Data structure to hold block indices will be a hash table (i.e fixed
+  length array) where values are keys to other block indices thus forming a linked
+  list for sequential block access. Key-value pairs in the FAT will need to be offset
+  by data_block_root when requesting disk for the specific block.
 
   Free-space allocation:
   Since the FAT will have to be read from memory anyways, the free-space list
   can be built when mounting the fs with no additonal cost. As the
-  FAT is read into memory, any null valued entries can be added to the free-space list
+  FAT is read into memory, any null valued entries (i.e 0) can be added to the free-space
+  list.
 
   Data Blocks will hold the files. Directory structure is also included here since
   directories can be regarded as files. The first block (i.e block n) will be the root
@@ -81,7 +86,7 @@ public class TFSFileSystem
    ***************************/
   // integer arrays default to 0 as per Java Language Specification.
   // 0 indicates a null pointer since block 0 is the PCB
-  private static int[] fat;           // new int[pcb_fat_size]
+  private static int[] fat;           // new int[pcb_fat_size*BLOCK_SIZE]
 
   /***************************
    * Data Blocks             *
@@ -103,13 +108,15 @@ public class TFSFileSystem
     // Do not allow file system creation while a file is mounted
     if (fs_mounted) throw new TFSException("Cannot create file system while mounted");
 
-    // Assign default values
+    // Assign default values. Must be care when making modifications,
+    // especially the # of entries in FAT must match # of data blocks
     pcb_root        = 0;
     pcb_size        = 1;
     pcb_fs_size     = 1+32+512;
     pcb_fat_size    = 32;
     pcb_fat_root    = 1;
-    fat             = new int[pcb_fat_size];
+                       // default initializes to 0 by Java Lang. Spec
+    fat             = new int[pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE];
     data_block_root = pcb_size+pcb_fat_size;
     data_block_size = 512;
 
@@ -123,7 +130,7 @@ public class TFSFileSystem
 
     // buffer to hold a block of data
     ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
-    
+
     // Write pcb to disk
     buffer.putInt(pcb_root);
     buffer.putInt(pcb_size);
@@ -136,23 +143,19 @@ public class TFSFileSystem
     buffer.clear();
 
     // Write fat to disk
+    // A 128 byte block can hold 16 entries (i.e 128/8)
+    int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/8;
     for (int i = 0; i < pcb_fat_size; ++i){
       buffer.clear();
-      // A 128 byte block can hold 16 entries
-      for (int j = 0; j < TFSDiskInputOutput.BLOCK_SIZE/8; ++i){
-        buffer.putInt(i*j+j
+      for (int j = 0; j < num_entries_per_block; ++j){
+        buffer.putInt(i*num_entries_per_block+j); // add key
+        buffer.putInt(fat[i*num_entries_per_block+j]); // add value, 0 for null pointer
       }
+      TFSDiskInputOutput.tfs_dio_write_block(i,buffer.array());
     }
+    TFSDiskInputOutput.tfs_dio_close();
 
-    
-    
-    
-    
-
-    
-    
-
-return -1;
+    return 0;
   }
 
   public static int tfs_mount()

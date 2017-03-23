@@ -29,7 +29,6 @@ public class TestSuite {
    ********************************************/
   @Test
   public void test_disk_creation() throws IOException {
-
     assertEquals(TFSDiskInputOutput.tfs_dio_create(DBNAME.getBytes(), DBNAME.length(), 5),0);
     File f = new File(DBNAME);
     assertEquals(f.length(), 5*128);
