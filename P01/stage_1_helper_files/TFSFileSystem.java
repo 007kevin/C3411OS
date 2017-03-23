@@ -62,7 +62,6 @@ public class TFSFileSystem
 {
   private static final String TFSDiskFile = "TFSDiskFile";
 
-
   /***************************
    * Partition Control Block *
    ***************************/
@@ -123,7 +122,7 @@ public class TFSFileSystem
     TFSDiskInputOutput.tfs_dio_open(TFSDiskFile.getBytes(),TFSDiskFile.length());
 
     // buffer to hold a block of data
-    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskFile.BLOCK_SIZE);
+    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
     
     // Write pcb to disk
     buffer.putInt(pcb_root);
@@ -133,8 +132,20 @@ public class TFSFileSystem
     buffer.putInt(pcb_fat_root);
     TFSDiskInputOutput.tfs_dio_write_block(0,buffer.array());
 
-    // Reset position to beginning
+    // Reset buffer position to beginning
     buffer.clear();
+
+    // Write fat to disk
+    for (int i = 0; i < pcb_fat_size; ++i){
+      buffer.clear();
+      // A 128 byte block can hold 16 entries
+      for (int j = 0; j < TFSDiskInputOutput.BLOCK_SIZE/8; ++i){
+        buffer.putInt(i*j+j
+      }
+    }
+
+    
+    
     
     
 
