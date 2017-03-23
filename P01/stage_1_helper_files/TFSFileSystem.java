@@ -46,7 +46,7 @@ import java.util.*;
                           for the 8 bits allocated to the byte. If we has used int, then
                           3 of the 4 bytes allocated would be wasted
   int      block        - index into the first block in FAT
-  int      size         - size of the file in bytes.
+  int      size         - size of the file in bytes. NOT BLOCKS.
   byte[2]  padding      - padding to ensure each directory entry is 32 bytes.
                           This makes writing/reading data from blocks easier
                           since exactly 4 entries can fit per block. Don't need to
@@ -153,6 +153,25 @@ public class TFSFileSystem
       }
       TFSDiskInputOutput.tfs_dio_write_block(i,buffer.array());
     }
+
+    // Write directory entry into first data block
+    // int      parent_block
+    // byte     directory
+    // byte[16] name
+    // byte     nlength
+    // int      block
+    // int      size
+    // byte[2]  padding
+    buffer.clear();
+    buffer.putInt(0); // int parent_block - root will be a parent to itself
+    buffer.put(1);    // root is a
+    buffer.put(new byte[16]);
+    buffer.put(0);
+    buffer.put(0);
+    
+
+
+
     TFSDiskInputOutput.tfs_dio_close();
 
     return 0;
@@ -160,6 +179,7 @@ public class TFSFileSystem
 
   public static int tfs_mount()
   {
+
     return -1;
   }
 
@@ -175,6 +195,7 @@ public class TFSFileSystem
 
   public static String tfs_prrfs()
   {
+
     return null;
   }
 
