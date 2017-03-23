@@ -155,22 +155,14 @@ public class TFSFileSystem
     }
 
     // Write directory entry into first data block
-    // int      parent_block
-    // byte     directory
-    // byte[16] name
-    // byte     nlength
-    // int      block
-    // int      size
-    // byte[2]  padding
     buffer.clear();
-    buffer.putInt(0); // int parent_block - root will be a parent to itself
-    buffer.put(1);    // root is a
-    buffer.put(new byte[16]);
-    buffer.put(0);
-    buffer.put(0);
-    
-
-
+    buffer.putInt(0);              // int      parent_block - root is parent to itself
+    buffer.put((byte) 1);          // byte     directory    - root is directory
+    buffer.put(new byte[16]);      // byte[16] name         - root has no name
+    buffer.put((byte) 0);          // byte     nlength      - root's name is length 0
+    buffer.put((byte) 0);          // int      block        - null pointer
+    buffer.put((byte) 0);          // int      size         - root directory is initially empty
+    buffer.put(new byte[2]);       // byte[2]  padding  
 
     TFSDiskInputOutput.tfs_dio_close();
 
