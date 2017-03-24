@@ -97,25 +97,44 @@ public class TestSuite {
     values[5] = pcb_data_block_root;
     values[6] = pcb_data_block_size;
 
+    // assert default values for PCB are written correcly
     r.seek(pcb_root);
     for (int i = 0; i < 7; ++i){
       assertEquals(r.readInt(), values[i]);
     }
 
     // assert the default values for FAT are correctly written
-    r.seek(pcb_fat_root);
+    r.seek(pcb_fat_root*TFSDiskInputOutput.BLOCK_SIZE);
     for (int i = 0; i < pcb_data_block_size; ++i){
-      int val = r.readInt();
-      // assertEquals(r.readInt(),(int)0); // values in fat should be 0
-      System.out.println(val);
+      assertEquals(0,r.readInt()); // values in fat should be 0
     }
 
+    // assert the default values for directory are written correctly
+    r.seek(pcb_data_block_root*TFSDiskInputOutput.BLOCK_SIZE);
+    byte[] name = new byte[16];
+    byte[] padding = new byte[2];
+    assertEquals(0,r.readInt());
+    assertEquals((byte) 1, r.readByte());
+    r.readFully(name);
+    assertEquals(true,Arrays.equals(name, new byte[16]));
+    assertEquals((byte) 0, r.readByte());
+    assertEquals((byte) 0, r.readByte());
+    r.readFully(padding);
+    assertEquals(true,Arrays.equals(padding, new byte[2]));
+  }
 
+  @Test
+  public void test_mount_and_umount_of_disk() throws IOException {
+    TFSFileSystem.tfs_mkfs();
+    TFSFileSystem.tfs_mount();
+    assertEquals(true, TFSDiskInputOutput.is_open());
+    TFSFileSystem.tfs_umount();
+    assertEquals(false, TFSDiskInputOutput.is_open());    
   }
 
   @Ignore
   public void tfs_prrfs() throws IOException {
-
+    
   }
 
   @Ignore

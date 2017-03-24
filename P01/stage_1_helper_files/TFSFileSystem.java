@@ -19,11 +19,11 @@ import java.util.*;
     pcb_size            - number of blocks allocated to PCB
     pcb_fs_size         - total number of blocks in the TFS Disk
     pcb_fat_root        - first block of the FAT
-    pcb_fat_size        - the number of index blocks in the FAT table. values will range  
-                          from [0, m -n]. Index value 0 can be used as null pointer since  
-                          it will hold the root directory by default (We will assume we   
+    pcb_fat_size        - the number of index blocks in the FAT table. values will range
+                          from [0, m -n]. Index value 0 can be used as null pointer since
+                          it will hold the root directory by default (We will assume we
                           never want to delete the root directory because if we did, there
-                          would be no entry point for the file system when mounting).     
+                          would be no entry point for the file system when mounting).
     pcb_data_block_root - first block of the data block
     pcb_data_block_size - number of blocks allocated to data blocks
 
@@ -84,17 +84,17 @@ public class TFSFileSystem
   // Given value are int, 4 bytes will consist of one fat entry
   // thus (32*128)/4 = 1024
   private static int pcb_fs_size;         // 1+32+1024
-  private static int pcb_fat_root;        // 1  
+  private static int pcb_fat_root;        // 1
   private static int pcb_fat_size;        // 32
   private static int pcb_data_block_root; // pcb_size+pcb_fat_size
   private static int pcb_data_block_size; // 1024
-  
+
   /***************************
    * File Allocation Table   *
    ***************************/
   // integer arrays default to 0 as per Java Language Specification.
   // 0 indicates a null pointer since block 0 is the PCB
-  private static int[] fat;               // new int[pcb_fat_size*BLOCK_SIZE]
+  private static int[] fat = null;               // new int[pcb_fat_size*BLOCK_SIZE]
 
   /***************************
    * Flags                   *
@@ -120,7 +120,7 @@ public class TFSFileSystem
     pcb_data_block_root = pcb_size+pcb_fat_size;
     pcb_data_block_size = 1024;
                       // default initializes to 0 by Java Lang. Spec
-    fat             = new int[pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE];
+    fat             = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
 
     // Create disk file with default values
     TFSDiskInputOutput.tfs_dio_create(TFSDiskFile.getBytes(),
@@ -137,28 +137,47 @@ public class TFSFileSystem
     _tfs_write_fat();
 
     // Write directory entry into first data block
-    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);    
+    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
     buffer.putInt(0);              // int      parent_block - root is parent to itself
     buffer.put((byte) 1);          // byte     directory    - root is directory
     buffer.put(new byte[16]);      // byte[16] name         - root has no name
     buffer.put((byte) 0);          // byte     nlength      - root's name is length 0
     buffer.put((byte) 0);          // int      block        - null pointer
     buffer.put((byte) 0);          // int      size         - root directory is initially empty
-    buffer.put(new byte[2]);       // byte[2]  padding  
-    
-    TFSDiskInputOutput.tfs_dio_close();    
+    buffer.put(new byte[2]);       // byte[2]  padding
+    TFSDiskInputOutput.tfs_dio_write_block(pcb_data_block_root,buffer.array());
+
+    TFSDiskInputOutput.tfs_dio_close();
     fs_mounted = false;
     return 0;
   }
-  
-  public static int tfs_mount()
+
+  public static int tfs_mount() throws IOException
   {
-    return -1;
+    if (fs_mounted)
+      throw new TFSException("File system already mounted");
+    if (TFSDiskInputOutput.is_open())
+      throw new TFSException("Disk already open");
+    
+    TFSDiskInputOutput.tfs_dio_open(TFSDiskFile.getBytes(),TFSDiskFile.length());
+    fs_mounted = true;
+    // note: PCB should always be read first since read_fat needs the values from the PCB
+    _tfs_read_pcb();
+    _tfs_read_fat();
+    return 0;
   }
 
-  public static int tfs_umount()
+  public static int tfs_umount() throws IOException
   {
-    return -1;
+    if (!fs_mounted)
+      throw new TFSException("File system already unmounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Disk is closed. Cannot write memory out to disk");
+    _tfs_write_pcb();
+    _tfs_write_fat();
+    TFSDiskInputOutput.tfs_dio_close();
+    fs_mounted = false;
+    return 0;
   }
 
   public static int tfs_sync()
@@ -184,6 +203,7 @@ public class TFSFileSystem
 
   public static int tfs_read(int file_id, byte[] buf, int blength)
   {
+
     return -1;
   }
 
@@ -265,18 +285,37 @@ public class TFSFileSystem
     if (!fs_mounted)
       throw new TFSException("Cannot write to PCB. Disk not mounted");
     if (!TFSDiskInputOutput.is_open())
-      throw new TFSException("Cannot write to PCB. Disk not open");    
-    
+      throw new TFSException("Cannot write to PCB. Disk not open");
+
     ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
     // Write pcb to disk
     buffer.putInt(pcb_root);
     buffer.putInt(pcb_size);
     buffer.putInt(pcb_fs_size);
-    buffer.putInt(pcb_fat_root);    
+    buffer.putInt(pcb_fat_root);
     buffer.putInt(pcb_fat_size);
     buffer.putInt(pcb_data_block_root);
-    buffer.putInt(pcb_data_block_size);    
+    buffer.putInt(pcb_data_block_size);
     TFSDiskInputOutput.tfs_dio_write_block(pcb_root,buffer.array());
+  }
+
+  private static void _tfs_read_pcb() throws IOException {
+    if (!fs_mounted)
+      throw new TFSException("Cannot write to PCB. Disk not mounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Cannot write to PCB. Disk not open");
+
+    // read pcb from disk
+    byte[] buffer = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+    ByteBuffer bb = ByteBuffer.wrap(buffer);
+    TFSDiskInputOutput.tfs_dio_read_block(0,buffer);
+    pcb_root = bb.getInt();
+    pcb_size = bb.getInt();
+    pcb_fs_size = bb.getInt();
+    pcb_fat_root = bb.getInt();
+    pcb_fat_size = bb.getInt();
+    pcb_data_block_root = bb.getInt();
+    pcb_data_block_size = bb.getInt();
   }
 
   /*
@@ -287,18 +326,43 @@ public class TFSFileSystem
     if (!fs_mounted)
       throw new TFSException("Cannot write to PCB. Disk not mounted");
     if (!TFSDiskInputOutput.is_open())
-      throw new TFSException("Cannot write to PCB. Disk not open");    
+      throw new TFSException("Cannot write to PCB. Disk not open");
 
-    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
     // Write fat to disk
     // A 128 byte block can hold 32 entries (i.e 128/4)
     int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/4;
+
+    ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
     for (int i = 0; i < pcb_fat_size; ++i){
       buffer.clear();
       for (int j = 0; j < num_entries_per_block; ++j){
         buffer.putInt(fat[i*num_entries_per_block+j]); // add value, 0 for null pointer
       }
       TFSDiskInputOutput.tfs_dio_write_block(pcb_fat_root+i,buffer.array());
+    }
+  }
+
+  private static void _tfs_read_fat() throws IOException {
+    if (!fs_mounted)
+      throw new TFSException("Cannot write to PCB. Disk not mounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Cannot write to PCB. Disk not open");
+    
+    // read fat from disk
+    byte[] buffer = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+    ByteBuffer bb = ByteBuffer.wrap(buffer);
+    int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/4;    
+
+    // check int array is defined
+    if (fat == null) 
+      fat = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
+
+    for (int i = 0; i < pcb_fat_size; ++i){
+      TFSDiskInputOutput.tfs_dio_read_block(pcb_fat_root+i,buffer);
+      bb.clear();
+      for (int j = 0; j < num_entries_per_block; ++j){
+        fat[i*num_entries_per_block+j] = bb.getInt();
+      }
     }
   }
 }
