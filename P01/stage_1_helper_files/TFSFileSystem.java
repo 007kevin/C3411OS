@@ -180,6 +180,13 @@ public class TFSFileSystem
     return 0;
   }
 
+  public static int tfs_exit() throws IOException {
+    if (fs_mounted){
+      tfs_umount();
+    }
+    return 0;
+  }
+
   public static int tfs_sync()
   {
     return -1;
