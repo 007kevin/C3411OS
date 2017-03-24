@@ -158,7 +158,7 @@ public class TFSFileSystem
       throw new TFSException("File system already mounted");
     if (TFSDiskInputOutput.is_open())
       throw new TFSException("Disk already open");
-    
+
     TFSDiskInputOutput.tfs_dio_open(TFSDiskFile.getBytes(),TFSDiskFile.length());
     fs_mounted = true;
     // note: PCB should always be read first since read_fat needs the values from the PCB
@@ -192,15 +192,77 @@ public class TFSFileSystem
     return -1;
   }
 
-  public static String tfs_prrfs()
+  // Print PCB and FAT in the file system (disk)
+  public static String tfs_prrfs() throws IOException
   {
+    if (!fs_mounted)
+      throw new TFSException("Cannot print records. File system not mounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Cannot print records. Disk not open");
 
-    return null;
+    byte[] buffer = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+    ByteBuffer bb =  ByteBuffer.wrap(buffer);
+    TFSDiskInputOutput.tfs_dio_read_block(pcb_root, buffer);
+    int disk_pcb_root = bb.getInt();
+    int disk_pcb_size = bb.getInt();
+    int disk_pcb_fs_size = bb.getInt();
+    int disk_pcb_fat_root = bb.getInt();
+    int disk_pcb_fat_size = bb.getInt();
+    int disk_pcb_data_block_root = bb.getInt();
+    int disk_pcb_data_block_size = bb.getInt();
+
+    String output = "";
+    output+="Disk\n";
+    output+="  +---------+---------+-----------------------------------+\n";
+    output+="  |         |         |                                   |\n";
+    output+="  |   PCB   |   FAT   |   Data Blocks                     |\n";
+    output+="  |         |         |                                   |\n";
+    output+="  +---------+---------+-----------------------------------+\n";
+    output+="File System:\n";
+    output+="  block size = " + TFSDiskInputOutput.BLOCK_SIZE + " bytes\n";
+    output+="  total disk blocks = " + disk_pcb_fs_size + " \n";
+    output+="PCB:\n";
+    output+="  root = " + disk_pcb_root + "\n";
+    output+="  size = " + disk_pcb_size + "\n";
+    output+="FAT:\n";
+    output+="  root = " + disk_pcb_fat_root + "\n";
+    output+="  size = " + disk_pcb_fat_size + "\n";
+    output+="Data Blocks:\n";
+    output+="  root = " + disk_pcb_data_block_root + "\n";
+    output+="  size = " + disk_pcb_data_block_size + "\n";
+
+    return output;
   }
 
-  public static String tfs_prmfs()
+  // Print PCB and FAT in memory
+  public static String tfs_prmfs() throws IOException
   {
-    return null;
+    if (!fs_mounted)
+      throw new TFSException("Cannot print records. File system not mounted");
+    if (!TFSDiskInputOutput.is_open())
+      throw new TFSException("Cannot print records. Disk not open");
+
+    String output = "";
+    output+="Memory\n";    
+    output+="  +---------+---------+-----------------------------------+\n";
+    output+="  |         |         |                                   |\n";
+    output+="  |   PCB   |   FAT   |   Data Blocks                     |\n";
+    output+="  |         |         |                                   |\n";
+    output+="  +---------+---------+-----------------------------------+\n";
+    output+="File System:\n";
+    output+="  block size = " + TFSDiskInputOutput.BLOCK_SIZE + " bytes\n";
+    output+="  total disk blocks = " + pcb_fs_size + " \n";
+    output+="PCB:\n";
+    output+="  root = " + pcb_root + "\n";
+    output+="  size = " + pcb_size + "\n";
+    output+="FAT:\n";
+    output+="  root = " + pcb_fat_root + "\n";
+    output+="  size = " + pcb_fat_size + "\n";
+    output+="Data Blocks:\n";
+    output+="  root = " + pcb_data_block_root + "\n";
+    output+="  size = " + pcb_data_block_size + "\n";
+
+    return output;
   }
 
   public static int tfs_open(byte[] name, int nlength)
@@ -354,14 +416,14 @@ public class TFSFileSystem
       throw new TFSException("Cannot write to PCB. Disk not mounted");
     if (!TFSDiskInputOutput.is_open())
       throw new TFSException("Cannot write to PCB. Disk not open");
-    
+
     // read fat from disk
     byte[] buffer = new byte[TFSDiskInputOutput.BLOCK_SIZE];
     ByteBuffer bb = ByteBuffer.wrap(buffer);
-    int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/4;    
+    int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/4;
 
     // check int array is defined
-    if (fat == null) 
+    if (fat == null)
       fat = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
 
     for (int i = 0; i < pcb_fat_size; ++i){

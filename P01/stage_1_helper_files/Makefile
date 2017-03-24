@@ -14,3 +14,7 @@ out: clean
 test: out
 	@$(JAVA) -cp $(CLASSPATH) org.junit.runner.JUnitCore $(basename $(FILE))
 
+shell:
+	@$(JAVAC) TFSShell.java
+	@$(JAVA) TFSMain
+

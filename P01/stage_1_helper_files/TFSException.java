@@ -2,6 +2,6 @@ import java.io.*;
 
 class TFSException extends IOException {
   public TFSException(String msg){
-    super(msg);
+    super("TFSException: " + msg);
   }
 }

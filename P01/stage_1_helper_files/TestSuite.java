@@ -17,8 +17,7 @@ public class TestSuite {
     /*
      * DISK CLEANUP ROUTINE
      */
-    if (TFSDiskInputOutput.is_open())
-      TFSDiskInputOutput.tfs_dio_close();
+    TFSFileSystem.tfs_exit();    
     File f = new File(DBNAME);
     if (f.exists())
       f.delete();
@@ -133,9 +132,19 @@ public class TestSuite {
   }
 
   @Ignore
-  public void tfs_prrfs() throws IOException {
-    
+  public void tfs_prrfs() throws IOException { 
+    TFSFileSystem.tfs_mkfs();
+    TFSFileSystem.tfs_mount();
+    System.out.println(TFSFileSystem.tfs_prrfs());
   }
+
+  @Ignore
+  public void tfs_prmfs() throws IOException { 
+    TFSFileSystem.tfs_mkfs();
+    TFSFileSystem.tfs_mount();
+    System.out.println(TFSFileSystem.tfs_prmfs());
+  }
+  
 
   @Ignore
   public void tfs_exit() throws IOException {
