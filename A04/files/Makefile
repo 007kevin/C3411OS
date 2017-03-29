@@ -7,11 +7,16 @@ JAVAC		= javac
 JAVA		= java
 
 out: clean
-	@$(JAVAC) AlgorithmSimulation.java
+	@$(JAVAC) AlgorithmSimulationFCFS.java
+	@$(JAVAC) AlgorithmSimulationSJF.java
 	@$(JAVAC) SampleGenerator.java
 
-run: out
-	@$(JAVA) AlgorithmSimulation
+fcfs: out
+	@$(JAVA) AlgorithmSimulationFCFS
+
+sjf: out
+	@$(JAVA) AlgorithmSimulationSJF
+
 
 sample: out
 	@$(JAVA) SampleGenerator

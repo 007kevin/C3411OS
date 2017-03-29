@@ -39,7 +39,7 @@ public class SampleGenerator
 				burst = r.nextInt(max_burst) + 1;
 				if (arrival + burst > SIM_TIME)
 					break;
-				System.out.println(process + "  " + arrival + "  " + priority + "  " + burst);
+				// System.out.println(process + "  " + arrival + "  " + priority + "  " + burst);
 				dos.writeInt(process);
 //				dos.writeBytes("  ");
 				dos.writeInt(arrival);
