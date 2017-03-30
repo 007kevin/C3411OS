@@ -12,15 +12,13 @@ class ProcessEval {
 
 // Makes min-heap with smallest CPU burst time at the top. If a process
 // is occupying the CPU, it will stay at the head of the priority queue
-class SJFComparator implements Comparator<ProcessControlBlock> {
+class PriorityComparator implements Comparator<ProcessControlBlock> {
   public int compare(ProcessControlBlock A, ProcessControlBlock B) {
-    if (A.getRuntime() != 0) return -1;
-    if (B.getRuntime() != 0) return 1;
-    return A.getCpuBurstTime() - B.getCpuBurstTime();
+    return A.getPriority() - B.getPriority();
   }
 }
 
-public class AlgorithmSimulationSJF {
+public class AlgorithmSimulationPriority {
   
   public static void main(String[] args) {
     LinkedList<ProcessControlBlock> readyQ = new LinkedList<ProcessControlBlock>();
@@ -57,13 +55,13 @@ public class AlgorithmSimulationSJF {
       readyQ.add(PCB);
     }
     /************************************************
-     * ALGORITHM EVALUATION: SJF without premption 
+     * ALGORITHM EVALUATION: SJF with premption 
      ************************************************/
     // Keep track of done processes
     LinkedList<ProcessEval> Eval = new LinkedList<ProcessEval>();
 
     // Assume head of LinkedList is being processed by CPU
-    java.util.PriorityQueue<ProcessControlBlock> Q = new java.util.PriorityQueue<ProcessControlBlock>(new SJFComparator());
+    java.util.PriorityQueue<ProcessControlBlock> Q = new java.util.PriorityQueue<ProcessControlBlock>(new PriorityComparator());
     for (int ms = 0; ms <= SIM_TIME || Q.size() != 0; ++ms){
       if (ms%MINUTE == 0){
 

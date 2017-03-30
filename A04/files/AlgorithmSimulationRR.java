@@ -10,17 +10,7 @@ class ProcessEval {
   }
 }
 
-// Makes min-heap with smallest CPU burst time at the top. If a process
-// is occupying the CPU, it will stay at the head of the priority queue
-class SJFComparator implements Comparator<ProcessControlBlock> {
-  public int compare(ProcessControlBlock A, ProcessControlBlock B) {
-    if (A.getRuntime() != 0) return -1;
-    if (B.getRuntime() != 0) return 1;
-    return A.getCpuBurstTime() - B.getCpuBurstTime();
-  }
-}
-
-public class AlgorithmSimulationSJF {
+public class AlgorithmSimulationRR {
   
   public static void main(String[] args) {
     LinkedList<ProcessControlBlock> readyQ = new LinkedList<ProcessControlBlock>();
@@ -36,6 +26,9 @@ public class AlgorithmSimulationSJF {
     int TEN_MINUTES = 10*MINUTE;
     int HOUR = 60*MINUTE;
     int SIM_TIME = HOUR;
+
+    // Time Quanta
+    int QUANTUM = 50;
 
     // System.out.print("Sample File?  ");
     // sampleFile = SavitchIn.readLineWord();
@@ -57,14 +50,16 @@ public class AlgorithmSimulationSJF {
       readyQ.add(PCB);
     }
     /************************************************
-     * ALGORITHM EVALUATION: SJF without premption 
+     * ALGORITHM EVALUATION: RR without premption 
      ************************************************/
     // Keep track of done processes
     LinkedList<ProcessEval> Eval = new LinkedList<ProcessEval>();
 
     // Assume head of LinkedList is being processed by CPU
-    java.util.PriorityQueue<ProcessControlBlock> Q = new java.util.PriorityQueue<ProcessControlBlock>(new SJFComparator());
+    LinkedList<ProcessControlBlock> Q = new LinkedList<ProcessControlBlock>();
+    
     for (int ms = 0; ms <= SIM_TIME || Q.size() != 0; ++ms){
+      // Print average times every minute
       if (ms%MINUTE == 0){
 
         // Remove completed times older than 10 minutes
@@ -91,12 +86,19 @@ public class AlgorithmSimulationSJF {
         Q.add(readyQ.poll());
       }
 
-      // Remove process from queue when CPU burst time met
+      // Remove any done processes from head of Queue
       if (Q.size() > 0 && Q.peek().getRuntime() >= Q.peek().getCpuBurstTime()){
         ProcessControlBlock PCB = Q.poll();
         int TT = ms - PCB.getArrivalTime();
         int WT = TT - PCB.getCpuBurstTime();
         Eval.add(new ProcessEval(PCB.getProcessNo(), TT, WT, ms));
+      }
+      
+      // Place process with used up quanta at end of Queue
+      if (Q.size() > 0 &&
+          Q.peek().getRuntime() != 0 &&
+          Q.peek().getRuntime()%QUANTUM == 0){
+        Q.add(Q.poll());
       }
 
       // Increment CPU running time of process if exist

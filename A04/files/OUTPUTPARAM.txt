@@ -1,0 +1,5 @@
+Minimum Priority?  40
+Maximum CPU Burst?  70
+Simulation Time?  3600000
+Average Arrival Time?  35
+Output File?  OUTPUT
