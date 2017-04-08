@@ -223,3 +223,121 @@
      Neat - UNIX tries to keep a file's data block near that file's inode block
      to reduce disk seek time.
 
+* Chapter 7 Deadlocks
+** Deadlock characterization
+   Deadlock can only arise iff conditions hold simultaneously
+   - Mutual Exclusion :: At least one resource held in a nonsharable mode
+   - Hold and wait :: Process must hold at least one resource and wait to acquire
+                      additional resource held by other processes
+   - No preemption :: resource can only be released voluntarily by process holding it
+   - Circular wait :: A set {P0,P1,...,Pn} waiting processes must exist such that
+                      P0 waits on P1, P1 waits on P2, ... , Pn waits on P0.
+
+   With resource allocation graphs, if graphs contains no cycles, then no process in
+   the system is deadlocked. Deadlock can exists iff there is a cycle (but not necessarily
+   occured)
+
+** Methods for handling deadlocks
+   - Deadlock prevention :: provides methods to ensure at least one of the necessary
+        conditions does not hold
+   - Deadlock avoidance :: OS given in advance additional information concerning which
+        resource a process will request and use
+   - Deadlock ignorance :: Since deadlocks occur infrequently, allow then to take up
+        resources until system reboot
+
+*** Deadlock prevention
+**** Mutual Exclusion
+     Have only sharable resources
+**** Hold and wait
+     Must have it whenever process requests a resource, it doesn't hold any other resources.
+    - One protocol is to require each process to request and be allocated all its resources
+      before it begins execution
+    - Another is to allow request for resources only when process has none
+      
+    Both protocols have disadvantages however since allocated resources may be unused for
+    a long time. Also, starvation of processes is possible since one of the many requested
+    resources may be always used by some other process.
+**** No preemption
+     No premption of resources that have already been allocated. 
+     Protocol: 
+     If process is holding some resources and requests another resource that cannot be
+     immediately allocated (i.e will have to wait), then all currently held resources are
+     preempted. The pro cess will restart only when it can regain its old resources as well
+     as receiving the new ones it is requesting.
+     
+**** Circular wait
+     One way to ensure this condition never holds is to impose a total ordering of all
+     resource types and require each process request resources in an increasing order
+     of enumeration.
+     
+     _Proof by contradition circular wait cannot hold_
+     Let the set of processes involved in the circular wait be {P0, P1, ..., Pn} where Pi
+     is waiting for a resource Ri which is held by process Pi+1 (let Rn be held by P0). 
+     Since process Pi+1 is holding resource Ri while requesting Ri+1, we must have 
+     F(Ri) < F(Ri+1) for all i. But this would be mean F(Rn) < F(R0) which is impossible.
+
+*** Deadlock avoidance
+    Deadlock avoidance algorithm dynamically examines the resource-allocation state
+    to ensure a circulate wait condition never exists. /state/ is de fined by number of 
+    available and allocated resources and maximum demands of the processes.
+
+    - Safe State :: system can allocate resources to each process in some order and 
+                    still avoid a deadlock. Formally, a system is in safe state iff there
+                    exists a /safe sequence/. 
+    - Safe sequence :: A sequence of processes <P1 , P2 , ..., Pn > 
+                       is a safe sequence for the current allocation state if, 
+                       for each Pi , the resource requests that Pi can make 
+                       can be satisﬁed by the currently available resources 
+                       plus the resources held by all Pj , with j < i.
+
+    With this scheme, if a requested resource is available, it may still have to 
+    wait thus overall resource utilization may be lower than it would be.
+
+**** Resource Allocation Graph Algorithms
+    - Before request is granted to process, claim edges are checked to make sure
+      no cycle will occur once claim edges are converted to assignment edges. 
+      O(n^2)
+
+    - Bankers Algorithm :: Above algorithm not applicable to resource allocation
+         system with multiple instances of each resource type. Four data structures
+         required:
+      - Available :: # avail resource of each  type
+      - Max :: 2D matrix defined maximum demand of each process
+      - Allocation :: 2D matrix defined number of resources of each type 
+                      currently allocated
+      - Need :: 2D matrix indicates remaining resource need of each process
+
+         Each process must apriori claim its maximum use of processes. O(mn^2)
+
+*** Deadlock Detection
+    When should we invoke detection algorithm
+    Must answer:
+    1) How often is a deadlock likely to occur?
+    2) How many processes will be affected by deadlock when it happens?
+
+    Deadlock detection algorithms run in O(mn^2)
+
+*** Recover from Deadlock
+    Two options for breaking a deadlock
+    1) Abort all deadlocked processes - can be expensive and costly
+    2) Abort one process at a time until deadlock cycle eliminated - overhead
+
+**** Resource premption
+     We successuly prempt some resources from processes and give these resources
+     to other processes until the deadlock cycle is broken. For premption is
+     required for dealing with deadlocks, 3 issues must be addressed:
+     1) Selecting a victim
+     2) Rollback - how should we restart the prempted process in the future?
+     3) Starvation - How do we guarantee resource will not always be preempted
+        from the same process?
+       
+         
+                
+
+      
+
+
+     
+     
+     
+* Chapter 8
