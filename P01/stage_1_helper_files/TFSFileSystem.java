@@ -109,9 +109,20 @@ public class TFSFileSystem
   /***************************
    * File Descriptor Table   *
    ***************************/
-  private class FileDescriptor {
-    
+  private static class FileDescriptor {
+    boolean d; // directory flag
+    String name;
+    int block;  // first block number of the file
+    int offset; // file pointer offset in bytes
+    int size; // size of file in bytes
 
+    public FileDescriptor(boolean d, String name, int block, int offset, int size){
+      this.d = d;
+      this.name = name;
+      this.block = block;
+      this.offset = offset; 
+      this.size = size;
+    }
   }
   
   private static FileDescriptor fdt[] = null;
@@ -137,7 +148,8 @@ public class TFSFileSystem
     pcb_data_block_size = 1024;
                     // default initializes to 0 by Java Lang. Spec
     fat             = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
-                    // default initialize java objects to null
+                    // default initialize java objects to null. Null values
+                    // indicate entry is file descriptor is free
     fdt             = new FileDescriptor[100];
     
     // Create disk file with default values
@@ -205,9 +217,11 @@ public class TFSFileSystem
     return 0;
   }
 
-  public static int tfs_sync()
+  public static int tfs_sync() throws IOException
   {
-    return -1;
+    _tfs_write_pcb();
+    _tfs_write_fat();
+    return 0;
   }
 
   // Print PCB and FAT in the file system (disk)
@@ -334,32 +348,81 @@ public class TFSFileSystem
    * TFS private methods to handle in-memory structures
    */
 
-  private static int _fs_read_block(int block_no, byte buf[])
+  private static int _tfs_read_block(int block_no, byte buf[]) throws IOException
   {
-    return -1;
+    return TFSDiskInputOutput.tfs_dio_read_block(block_no,buf);
   }
 
-  private static int _tfs_write_block(int block_no, byte buf[])
+  private static int _tfs_write_block(int block_no, byte buf[]) throws IOException
   {
-    return -1;
+    return TFSDiskInputOutput.tfs_dio_write_block(block_no,buf);
   }
 
-  private static int _tfs_open_fd(byte name[], int nlength)
+  private static int _tfs_open_fd(byte name[], int nlength, int first_block_no, int file_size) throws IOException
   {
-    return -1;
+    int i = 0;
+    for (i = 0; i < fdt.length; ++i)
+      if (fdt[i] == null) break;
+
+    if (i > fdt.length)
+      throw new TFSException("No free entries found in fdt.");
+    fdt[i] = new FileDescriptor(false,
+                                new String(name, 0, nlength),
+                                first_block_no,
+                                0,
+                                file_size);
+    return i;
   }
 
-  private static int _tfs_seek_fd(int fd, int offset)
+  private static int _tfs_seek_fd(int fd, int offset) throws IOException
   {
-    return -1;
+    if (fd < 0 || fd >= fdt.length || offset >= fdt[fd].size)
+      throw new TFSException("Index out of bounds.");
+    fdt[fd].offset = offset;
+    return 0;
   }
 
-  private static void _tfs_close_fd(int fd)
+  private static void _tfs_close_fd(int fd) throws IOException
   {
-    return;
+    if (fd < 0 || fd >= fdt.length)
+      throw new TFSException("Index out of bounds.");
+    fdt[fd] = null;
+  }
+
+  private static int _tfs_read_bytes_fd(int fd, byte buf[], int length) throws IOException
+  {
+    if (length > buf.length)
+      throw new TFSException("Buffer size " + buf.length +
+                             " is less than requested length " + length );
+    if (fd < 0 || fd >= fdt.length)
+      throw new TFSException("Index out of bounds.");
+    if (length < 0)
+      throw new TFSException("Length cannot be negative.");
+    if (length > (fdt[fd].size - fdt[fd].offset))
+      throw new TFSException("Length greater than available bytes to be read.");
+    
+    return 0;
+  }
+
+  private static int _tfs_write_bytes_fd(int fd, byte buf[], int length) throws IOException
+  {
+    if (fd < 0 || fd >= fdt.length)
+      throw new TFSException("Index out of bounds");
+    
+    return -1;
   }
 
   private static int _tfs_get_block_no_fd(int fd, int offset)
+  {
+    return -1;
+  }
+
+  private static int _tfs_read_directory_fd(int fd,
+                                            byte[] is_directory,
+                                            byte[] nlength,
+                                            byte[][] name,
+                                            int[] first_block_no,
+                                            int[] file_size)
   {
     return -1;
   }
