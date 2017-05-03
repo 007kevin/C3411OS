@@ -67,6 +67,11 @@ import java.util.*;
   way up to the TFSShell class so any thrown exceptions can be handled in one place.
   Also, the code is more readable without the try-catch clauses
 
+  FDT - File Descriptor Table
+  
+   
+  
+
  ****************************************************/
 
 public class TFSFileSystem
@@ -101,6 +106,17 @@ public class TFSFileSystem
    ***************************/
   private static boolean fs_mounted  = false;
 
+  /***************************
+   * File Descriptor Table   *
+   ***************************/
+  private class FileDescriptor {
+    
+
+  }
+  
+  private static FileDescriptor fdt[] = null;
+  
+
 
   /*
    * TFS API
@@ -119,9 +135,11 @@ public class TFSFileSystem
     pcb_fat_size    = 32;
     pcb_data_block_root = pcb_size+pcb_fat_size;
     pcb_data_block_size = 1024;
-                      // default initializes to 0 by Java Lang. Spec
+                    // default initializes to 0 by Java Lang. Spec
     fat             = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
-
+                    // default initialize java objects to null
+    fdt             = new FileDescriptor[100];
+    
     // Create disk file with default values
     TFSDiskInputOutput.tfs_dio_create(TFSDiskFile.getBytes(),
                                       TFSDiskFile.length(),
@@ -316,7 +334,7 @@ public class TFSFileSystem
    * TFS private methods to handle in-memory structures
    */
 
-  private static int _tfs_read_block(int block_no, byte buf[])
+  private static int _fs_read_block(int block_no, byte buf[])
   {
     return -1;
   }

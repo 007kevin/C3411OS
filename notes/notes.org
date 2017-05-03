@@ -500,4 +500,54 @@
 
    [[file:F8_20.png]]      
 
-   
+* Chapter 9 Virtual Memory
+  Technique that allows the execution of processes that are not completely in memory,
+  thus allowing programs larger than memory
+
+  *Virtual memory*
+  Involes separation of logical memory as perceived by users from physical memory
+  to allow perceived memory to be larger than there is available
+
+** Demand Paging
+   A technique of loading only what is needed rather than loading the whole executable
+   program. *pager* is what brings only the required pages into memory.
+
+   A way to distinguish pages that are in memory and pages are in disk is to use a 
+   bit scheme in the page table. 
+
+   When process attempts to access page that is not marked as valid, a *page fault* will occur.
+   During this transition of control, the required page is brought into memory from disk
+   and the page table is updated. Control is returned to the process as though nothing 
+   had happened.
+
+   *pure demand paging* is when process continues to page fault whenever the requested page
+   is not in memory until every page that it needs is in memory.
+
+   Hardware to support demand paging (same as for paging and swapping):
+   - Page Table :: to mark an entry as valid or invalid
+   - Secondary memory :: to hold pages that are not present in memory.
+
+   *copy on write* - Upon forking a child process, rather than creating a copy of the
+   parent's address space, the pages are shared until a write is required, which then the
+   shared page will be created. Useful in cases where exec() is called right after fork(),
+   since we can avoid unecessary copying.
+
+** Page replacement
+   Solution to when there are no free frames left to bring the page residing on disk.
+   IF no frame is free, we find one not being currently used and free it by writing
+   it out to swap space.. We change page table to indicate page is no longer in memory.
+
+   Updated page fault service routine:
+   1) Find location of desired page on disk
+   2) Find a free frame:
+      a) If there exists free frame, use it
+      b) If no free frame, use page replacement to find victim frame
+      c) Write victim frame to disk; change the page and page tables accordingly
+   3) Read desired page into newly freed frame
+   4) Restart the user process
+
+   Note if no frames are free, TWO page transfers (out, int) are required. 
+   - Can reduce this overhead via *modify bit* to indicate page had been modified.
+
+
+
