@@ -68,9 +68,9 @@ import java.util.*;
   Also, the code is more readable without the try-catch clauses
 
   FDT - File Descriptor Table
-  
-   
-  
+
+
+
 
  ****************************************************/
 
@@ -120,13 +120,13 @@ public class TFSFileSystem
       this.d = d;
       this.name = name;
       this.block = block;
-      this.offset = offset; 
+      this.offset = offset;
       this.size = size;
     }
   }
-  
+
   private static FileDescriptor fdt[] = null;
-  
+
 
 
   /*
@@ -151,7 +151,7 @@ public class TFSFileSystem
                     // default initialize java objects to null. Null values
                     // indicate entry is file descriptor is free
     fdt             = new FileDescriptor[100];
-    
+
     // Create disk file with default values
     TFSDiskInputOutput.tfs_dio_create(TFSDiskFile.getBytes(),
                                       TFSDiskFile.length(),
@@ -275,7 +275,7 @@ public class TFSFileSystem
       throw new TFSException("Cannot print records. Disk not open");
 
     String output = "";
-    output+="Memory\n";    
+    output+="Memory\n";
     output+="  +---------+---------+-----------------------------------+\n";
     output+="  |         |         |                                   |\n";
     output+="  |   PCB   |   FAT   |   Data Blocks                     |\n";
@@ -347,7 +347,6 @@ public class TFSFileSystem
   /*
    * TFS private methods to handle in-memory structures
    */
-
   private static int _tfs_read_block(int block_no, byte buf[]) throws IOException
   {
     return TFSDiskInputOutput.tfs_dio_read_block(block_no,buf);
@@ -400,7 +399,22 @@ public class TFSFileSystem
       throw new TFSException("Length cannot be negative.");
     if (length > (fdt[fd].size - fdt[fd].offset))
       throw new TFSException("Length greater than available bytes to be read.");
-    
+
+    ByteBuffer bb = ByteBuffer.wrap(buf);
+    byte tmp[] = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+    int n = length/TFSDiskInputOutput.BLOCK_SIZE;
+    int block = fdt[fd].block;
+
+    // Read block chunks into buf array
+    for (;n > 0; block=fat[block], n--){
+      _tfs_read_block(block,tmp);
+      bb.put(tmp);
+    }
+
+    // Read remaining into buf array
+    _tfs_read_block(block,tmp);
+    bb.put(tmp,0,length%TFSDiskInputOutput.BLOCK_SIZE);
+
     return 0;
   }
 
@@ -408,7 +422,6 @@ public class TFSFileSystem
   {
     if (fd < 0 || fd >= fdt.length)
       throw new TFSException("Index out of bounds");
-    
     return -1;
   }
 
