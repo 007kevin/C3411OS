@@ -407,8 +407,10 @@ public class TFSFileSystem
       throw new TFSException("Length " + length + " greater than available bytes to be read "
                              + (fdt[fd].size - fdt[fd].offset) + ".");
 
+    // in-memory buffers
     ByteBuffer bb = ByteBuffer.wrap(buf);
     byte tmp[] = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+
     int n = length/TFSDiskInputOutput.BLOCK_SIZE; // # of blocks to be read
     int block = fdt[fd].block; // first block of file
 
@@ -431,11 +433,38 @@ public class TFSFileSystem
                              " is less than write length " + length );
     if (fd < 0 || fd >= fdt.length)
       throw new TFSException("Fd index out of bounds: " + fd);
-    if (length < 0)
-      throw new TFSException("Length cannot be negative: " + length);
+    if (length <= 0)
+      throw new TFSException("Length cannot be non-positive: " + length);
 
-    
-    
+    // in-memory buffers
+    ByteBuffer src = null;
+
+    // get last block of the file
+    int n = fdt[fd].size/TFSDiskInputOutput.BLOCK_SIZE;
+    int block = fdt[fd].block;
+    for (;n > 0; block=fat[block], n--); // get last block
+
+    // if file size aligned with block size, allocate new block
+    if (fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE == 0){
+      fat[block] = _tfs_get_block_fat();
+      block = fat[block];
+      src = ByteBuffer.wrap(buf);
+    }
+    else {
+      byte tmp[] = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+      int s = fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE;
+      _tfs_read_block(block,tmp);
+      src = ByteBuffer
+        .allocate(s+length)
+        .put(tmp,0,s)
+        .put(buf,0,length)
+        .flip();
+    }
+
+
+
+
+
     return 0;
   }
 
@@ -529,7 +558,7 @@ public class TFSFileSystem
     byte[] buffer = new byte[TFSDiskInputOutput.BLOCK_SIZE];
     ByteBuffer bb = ByteBuffer.wrap(buffer);
 
-    // A 128 byte block can hold 32 entries (i.e 128/4)    
+    // A 128 byte block can hold 32 entries (i.e 128/4)
     int num_entries_per_block = TFSDiskInputOutput.BLOCK_SIZE/4;
 
     // check int array is defined
@@ -537,7 +566,7 @@ public class TFSFileSystem
       fat = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
 
     // rebuild the free space list while fat is being read from disk
-    fsl = null;
+    fsl = new LinkedList<Integer>();
 
     for (int i = 0; i < pcb_fat_size; ++i){
       TFSDiskInputOutput.tfs_dio_read_block(pcb_fat_root+i,buffer);
@@ -553,5 +582,11 @@ public class TFSFileSystem
         }
       }
     }
+  }
+
+  private static int _tfs_get_block_fat() throws IOException {
+    if (fsl == null || fsl.size() == 0)
+      throw new TFSException("Not enough space on disk. No free blocks available.");
+    return fsl.poll();
   }
 }
