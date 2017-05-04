@@ -505,13 +505,41 @@ public class TFSFileSystem
     return block;
   }
 
+  
+  // Will assume fd is a directory. Also, it is the responsibility
+  // of the caller to ensure passed array parameter lengths are
+  // the number of entries in the fd directory.
   private static int _tfs_read_directory_fd(int fd,
                                             byte[] is_directory,
                                             byte[] nlength,
                                             byte[][] name,
                                             int[] first_block_no,
                                             int[] file_size) throws IOException {
-    return -1;
+    if (fd < 0 || fd >= fdt.length)
+      return -1;
+
+    int num_entries = fdt[fd].size/32; // each entry exactly 32 bytes
+
+    // read directory into memory
+    int s = fdt[fd].size/TFSDiskInputOutput.BLOCK_SIZE;
+    if (fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE != 0)
+      s++;
+    s*=TFSDiskInputOutput.BLOCK_SIZE;
+    byte src[] = new byte[s];
+    _tfs_read_bytes_fd(fd,src,s);
+    ByteBuffer bb = ByteBuffer.wrap(src);
+    
+    for (int i = 0; i < num_entries; ++i){
+      bb.getInt();
+      is_directory[i] = bb.get();
+      bb.get(name[i],0,16);
+      nlength[i] = bb.get();
+      first_block_no[i] = bb.getInt();
+      file_size[i] = bb.getInt();
+      bb.get();
+      bb.get();
+    }
+    return num_entries;
   }
 
   /*
