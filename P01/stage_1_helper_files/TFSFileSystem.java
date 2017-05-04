@@ -147,6 +147,7 @@ public class TFSFileSystem
   /***************************
    * Free Space List         *
    ***************************/
+  // initialized during reading of fat table from disk
   private static LinkedList<Integer> fsl = null;
 
 
@@ -383,7 +384,7 @@ public class TFSFileSystem
   private static int _tfs_open_fd(byte name[], int nlength, int first_block_no, int file_size) throws IOException
   {
     int i = 0;
-    for (i = 0; i < fdt.length; ++i)
+    for (; i < fdt.length; ++i)
       if (fdt[i] == null) break;
 
     if (i > fdt.length)
@@ -400,6 +401,8 @@ public class TFSFileSystem
   {
     if (fd < 0 || fd >= fdt.length || offset >= fdt[fd].size)
       throw new TFSException("Index out of bounds.");
+    if (fdt[fd] == null)
+      throw new TFSException("File descriptor is null");
     fdt[fd].offset = offset;
     return 0;
   }
@@ -418,6 +421,8 @@ public class TFSFileSystem
                              " is less than length " + length );
     if (fd < 0 || fd >= fdt.length)
       throw new TFSException("Fd index out of bounds: " + fd);
+    if (fdt[fd] == null)
+      throw new TFSException("File descriptor is null");
     if (length < 0)
       throw new TFSException("Length cannot be negative: " + length);
     if (length > (fdt[fd].size - fdt[fd].offset))
@@ -450,6 +455,8 @@ public class TFSFileSystem
                              " is less than write length " + length );
     if (fd < 0 || fd >= fdt.length)
       throw new TFSException("Fd index out of bounds: " + fd);
+    if (fdt[fd] == null)
+      throw new TFSException("File descriptor is null");
     if (length <= 0)
       throw new TFSException("Length cannot be non-positive: " + length);
 
@@ -461,10 +468,6 @@ public class TFSFileSystem
     int n = fdt[fd].size/TFSDiskInputOutput.BLOCK_SIZE;
     int block = fdt[fd].block;
     for (;n > 0; block=fat[block], n--); // get last block
-
-    // Potential Bug: block value could be zero, but in that case
-    //                size would be 0 and a new block would get
-    //                allocation. Be wary of logic here if bug occurs.
 
     // if file size aligned with block size, allocate new block
     if (fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE == 0){
@@ -490,15 +493,15 @@ public class TFSFileSystem
       block = fat[block];
     }
 
-    fdt[fd].size+=length; // new length of the file
-
-    return 0;
+    return fdt[fd].size+length; // new length of the file
   }
 
   private static int _tfs_get_block_no_fd(int fd, int offset) throws IOException
   {
     if (fd < 0 || fd >= fdt.length)
       throw new TFSException("Fd index out of bounds: " + fd);
+    if (fdt[fd] == null)
+      throw new TFSException("File descriptor is null");
     int n = offset/TFSDiskInputOutput.BLOCK_SIZE;
     int block = fdt[fd].block; // first block of file
     for (;n > 0; block=fat[block], n--);
@@ -517,18 +520,28 @@ public class TFSFileSystem
                                             int[] file_size) throws IOException {
     if (fd < 0 || fd >= fdt.length)
       return -1;
+    if (fdt[fd] == null)
+      throw new TFSException("File descriptor is null");
 
-    int num_entries = fdt[fd].size/32; // each entry exactly 32 bytes
+    int s = fdt[fd].size;
+    int num_entries = s/32; // each entry exactly 32 bytes
+
+    // ensure each parameter array lengths are num_entries
+    if (is_directory.length != s ||
+        nlength.length != s ||
+        name.length != s ||
+        first_block_no.length != s ||
+        file_size.length != s)
+      return -1;
+    
+    byte src[] = new byte[s];
 
     // read directory into memory
-    int s = fdt[fd].size/TFSDiskInputOutput.BLOCK_SIZE;
-    if (fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE != 0)
-      s++;
-    s*=TFSDiskInputOutput.BLOCK_SIZE;
-    byte src[] = new byte[s];
     _tfs_read_bytes_fd(fd,src,s);
     ByteBuffer bb = ByteBuffer.wrap(src);
-    
+
+    // read bytes to extract directory entry values.
+    // Ensure bytes are read in correc order
     for (int i = 0; i < num_entries; ++i){
       bb.getInt();
       is_directory[i] = bb.get();
