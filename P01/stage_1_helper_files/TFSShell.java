@@ -225,7 +225,7 @@ public class TFSShell extends Thread
 	
   void ls(String directory) throws IOException
   {
-    System.out.println(current_directory);
+    
     return;
   }
 	
