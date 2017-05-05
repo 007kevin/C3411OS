@@ -127,21 +127,27 @@ public class TFSFileSystem
    * File Descriptor Table   *
    ***************************/
   private static class FileDescriptor {
-    int parent; // parent block
+    int p; // beginning of block for entry
+    int p_offset; // offset to entry from root    
+    int p_size; // size of parent
     boolean d; // directory flag
     String name; //file name
     int block;  // first block number of the file
     int offset; // file pointer offset in bytes
     int size; // size of file in bytes
 
-    public FileDescriptor(int p,boolean d, String name, int block, int offset, int size){
-      this.parent = p;
+    public FileDescriptor(int p, int p_offset, int p_size, boolean d,
+                          String name, int block, int offset, int size){
+      this.p = p;
+      this.p_offset = p_offset
+      this.root_offset = root_offset;
       this.d = d;
       this.name = name;
       this.block = block;
       this.offset = offset;
       this.size = size;
     }
+
   }
 
   private static FileDescriptor fdt[] = null;
@@ -390,6 +396,7 @@ public class TFSFileSystem
     if (i > fdt.length)
       throw new TFSException("No free entries found in fdt.");
     fdt[i] = new FileDescriptor(0,
+                                0,
                                 false,
                                 new String(name, 0, nlength),
                                 first_block_no,
@@ -414,9 +421,9 @@ public class TFSFileSystem
       throw new TFSException("Index out of bounds.");
     if (fdt[fd] == null)
       throw new TFSException("Attempt to close unopen fd: " + fd);
-
-
-
+    fdt[fd].parent;
+      
+      
     fdt[fd] = null;
   }
 
@@ -529,67 +536,6 @@ public class TFSFileSystem
     return 0;
   }
 
-  private static int _tfs_get_block_no_fd(int fd, int offset) throws IOException
-  {
-    if (fd < 0 || fd >= fdt.length)
-      throw new TFSException("Fd index out of bounds: " + fd);
-    if (fdt[fd] == null)
-      throw new TFSException("File descriptor is null");
-    int n = offset/TFSDiskInputOutput.BLOCK_SIZE;
-    int block = fdt[fd].block; // first block of file
-    for (;n > 0; block=fat[block], n--);
-    return block;
-  }
-
-
-  // Will assume fd is a directory. Also, it is the responsibility
-  // of the caller to ensure passed array parameter lengths are
-  // the number of entries in the fd directory.
-  private static int _tfs_read_directory_fd(int fd,
-                                            byte[] is_directory,
-                                            byte[] nlength,
-                                            byte[][] name,
-                                            int[] first_block_no,
-                                            int[] file_size) throws IOException {
-    if (fd < 0 || fd >= fdt.length)
-      return -1;
-    if (fdt[fd] == null)
-      throw new TFSException("File descriptor is null");
-
-    int s = fdt[fd].size;
-    int num_entries = s/32; // each entry exactly 32 bytes
-
-    // ensure each parameter array lengths are num_entries
-    if (is_directory.length != s ||
-        nlength.length != s ||
-        name.length != s ||
-        first_block_no.length != s ||
-        file_size.length != s)
-      return -1;
-
-    byte src[] = new byte[s];
-
-    // read directory into memory
-    int orig = fdt[fd].offset;
-    fdt[fd].offset = 0;
-    _tfs_read_bytes_fd(fd,src,s);
-    ByteBuffer bb = ByteBuffer.wrap(src);
-    fdt[fd].offset = orig;
-
-    // read bytes to extract directory entry values.
-    // Ensure bytes are read in correc order
-    for (int i = 0; i < num_entries; ++i){
-      bb.getInt();
-      is_directory[i] = bb.get();
-      bb.get(name[i],0,16);
-      nlength[i] = bb.get();
-      first_block_no[i] = bb.getInt();
-      file_size[i] = bb.getInt();
-      bb.get();
-      bb.get();
-    }
-    return num_entries;
-  }
 
   /*
    * PCB related utilities
@@ -777,8 +723,7 @@ public class TFSFileSystem
 
   /*
    * directory related utilities
-   */
-
+   */p
 
 
   /*
@@ -799,6 +744,7 @@ public class TFSFileSystem
     int size = bb.getInt();
     
     return new FileDescriptor(parent_block,
+                              size,
                               directory!=0,
                               new String(name, 0, nlength),
                               block,
@@ -844,6 +790,7 @@ public class TFSFileSystem
       bb.get();
       bb.get();
       entries[i] = new FileDescriptor(parent_block,
+                                      fd[fdt].size,
                                       directory!=0,
                                       new String(name, 0, nlength),
                                       block,
@@ -851,5 +798,11 @@ public class TFSFileSystem
                                       size);
     }
     return entries;
+  }
+
+  private static void __write_fd(FileDescriptor fd) throws IOException {
+    byte entry[] = new entry[32];
+    ByteBuffer bb = ByteBuffer.wrap(entry);
+    bb.putInt(fd.
   }
 }
