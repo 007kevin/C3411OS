@@ -3,8 +3,10 @@ import java.util.*;
 
 public class TFSShell extends Thread  
 {
+  String current_directory;
   public TFSShell()
   {
+    current_directory = "/";
   }
 	
   public void run()
@@ -68,7 +70,7 @@ public class TFSShell extends Thread
               ls(arg1);					
             }
             else
-              System.out.println("Usage: ls directory");
+              ls(current_directory);
           }
           else if (cmd.equals("create")) {
             if (stokenizer.hasMoreTokens()) {
@@ -171,7 +173,8 @@ public class TFSShell extends Thread
             System.out.println("-ush: " + cmd + ": command not found");
         }
       } catch (IOException e){
-        System.out.println(e.getMessage());
+        // System.out.println(e.getMessage());
+        e.printStackTrace(); // debug
       }
     }
   }
@@ -222,6 +225,7 @@ public class TFSShell extends Thread
 	
   void ls(String directory) throws IOException
   {
+    System.out.println(current_directory);
     return;
   }
 	

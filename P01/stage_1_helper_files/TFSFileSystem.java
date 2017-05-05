@@ -127,13 +127,15 @@ public class TFSFileSystem
    * File Descriptor Table   *
    ***************************/
   private static class FileDescriptor {
+    int parent; // parent block
     boolean d; // directory flag
     String name; //file name
     int block;  // first block number of the file
     int offset; // file pointer offset in bytes
     int size; // size of file in bytes
 
-    public FileDescriptor(boolean d, String name, int block, int offset, int size){
+    public FileDescriptor(int p,boolean d, String name, int block, int offset, int size){
+      this.parent = p;
       this.d = d;
       this.name = name;
       this.block = block;
@@ -149,8 +151,6 @@ public class TFSFileSystem
    ***************************/
   // initialized during reading of fat table from disk
   private static LinkedList<Integer> fsl = null;
-
-
 
   /*
    * TFS API
@@ -389,7 +389,8 @@ public class TFSFileSystem
 
     if (i > fdt.length)
       throw new TFSException("No free entries found in fdt.");
-    fdt[i] = new FileDescriptor(false,
+    fdt[i] = new FileDescriptor(0,
+                                false,
                                 new String(name, 0, nlength),
                                 first_block_no,
                                 0,
@@ -411,6 +412,11 @@ public class TFSFileSystem
   {
     if (fd < 0 || fd >= fdt.length)
       throw new TFSException("Index out of bounds.");
+    if (fdt[fd] == null)
+      throw new TFSException("Attempt to close unopen fd: " + fd);
+
+
+
     fdt[fd] = null;
   }
 
@@ -423,28 +429,36 @@ public class TFSFileSystem
       throw new TFSException("Fd index out of bounds: " + fd);
     if (fdt[fd] == null)
       throw new TFSException("File descriptor is null");
-    if (length < 0)
-      throw new TFSException("Length cannot be negative: " + length);
+    if (length <= 0)
+      throw new TFSException("Length must be positive: " + length);
     if (length > (fdt[fd].size - fdt[fd].offset))
       throw new TFSException("Length " + length + " greater than available bytes to be read "
                              + (fdt[fd].size - fdt[fd].offset) + ".");
 
-    // in-memory buffers
-    ByteBuffer bb = ByteBuffer.wrap(buf);
-    byte tmp[] = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+    ByteBuffer bb;
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    byte tmp[] = new byte[BS];
+    byte buffer[] = new byte[((length+BS-1)/BS)*BS]; // integer ceiling(length/BS)*BS
 
-    int n = length/TFSDiskInputOutput.BLOCK_SIZE; // # of blocks to be read
-    int block = fdt[fd].block; // first block of file
+    // move to block of current file pointer
+    int n = fdt[fd].offset/BS;
+    int block = fdt[fd].block;
+    for (;n > 0; n--)
+      block = fat[block];
 
-    // Read block chunks into buf array
-    for (;n > 0; block=fat[block], n--){
-      _tfs_read_block(block,tmp); // read block from disk into tmp buffer
-      bb.put(tmp); // add tmp buffer to array
+    // get block of read length
+    bb = ByteBuffer.wrap(buffer);
+    n = (fdt[fd].offset+(2*length)-1)/length; // ceiling(fdt[fd].offset+length)/length)
+    for (;n > 0; n--){
+      _tfs_read_block(block,tmp);
+      bb.put(tmp);
+      block = fat[block];
     }
 
-    // Read remaining bytes into buf array
-    _tfs_read_block(block,tmp);
-    bb.put(tmp,0,length%TFSDiskInputOutput.BLOCK_SIZE);
+    // return displaced bytes into buffer
+    bb = ByteBuffer.wrap(buf);
+    bb.put(buffer,fdt[fd].offset%BS,length);
+
     return 0;
   }
 
@@ -460,40 +474,59 @@ public class TFSFileSystem
     if (length <= 0)
       throw new TFSException("Length cannot be non-positive: " + length);
 
-    // in-memory buffers
-    ByteBuffer src = null;
-    byte tmp[] = new byte[TFSDiskInputOutput.BLOCK_SIZE];
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
 
-    // get last block of the file
-    int n = fdt[fd].size/TFSDiskInputOutput.BLOCK_SIZE;
+    // ensure enough blocks are allocated for write
+    if (fdt[fd].offset+length > ((fdt[fd].size+BS-1)/BS)*BS){
+      int block = fdt[fd].block;
+      for (int n = fdt[fd].size/BS; n>0; n--)
+        block=fat[block];
+      for (int n = (fdt[fd].offset+length+BS-1)/BS -
+             (fdt[fd].size+BS-1)/BS;n > 0; n--){
+        fat[block] = _tfs_get_block_fat();
+        block = fat[block];
+      }
+    }
+
+    // write to blocks
+
+    // move to block of current offset,
     int block = fdt[fd].block;
-    for (;n > 0; block=fat[block], n--); // get last block
-
-    // if file size aligned with block size, allocate new block
-    if (fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE == 0){
-      fat[block] = _tfs_get_block_fat();
+    for (int n = fdt[fd].offset/BS; n > 0; n--)
       block = fat[block];
-      src = ByteBuffer.wrap(buf);
+
+    // number of blocks to write
+    int nblks = (fdt[fd].offset+length+BS-1)/BS - fdt[fd].offset/BS;
+
+    // copy blocks to src buffer
+    ByteBuffer src = ByteBuffer.allocate(nblks*BS);
+    int tmpb = block;
+    for (int n = nblks; n > 0; n--){
+      byte tmp[] = new byte[BS];
+      _tfs_read_block(tmpb,tmp);
+      src.put(tmp);
+      tmpb = fat[tmpb];
     }
-    else {
-      int s = fdt[fd].size%TFSDiskInputOutput.BLOCK_SIZE;
-      _tfs_read_block(block,tmp);
-      src = ByteBuffer
-        .allocate(s+length)
-        .put(tmp,0,s)
-        .put(buf,0,length);
-      src.flip(); // reset position to 0
+    src.position(fdt[fd].offset%BS);
+    src.put(buf,0,length);
+
+    // write src buffer to memory
+    tmpb = block;
+    for (int n = nblks; n > 0; n--){
+      byte tmp[] = new byte[BS];
+      src.get(tmp);
+      _tfs_write_block(tmpb,tmp);
+      tmpb = fat[tmpb];
     }
 
-    while (true){
-      src.get(tmp,0,Math.min(src.remaining(),TFSDiskInputOutput.BLOCK_SIZE));
-      _tfs_write_block(block,tmp);
-      if (!src.hasRemaining()) break;
-      fat[block] = _tfs_get_block_fat();
-      block = fat[block];
-    }
+    // update file size
+    if (fdt[fd].offset+length > fdt[fd].size)
+      fdt[fd].size = fdt[fd].offset+length;
 
-    return fdt[fd].size+length; // new length of the file
+    // update file pointer
+    fdt[fd].offset+=length;
+
+    return 0;
   }
 
   private static int _tfs_get_block_no_fd(int fd, int offset) throws IOException
@@ -537,8 +570,11 @@ public class TFSFileSystem
     byte src[] = new byte[s];
 
     // read directory into memory
+    int orig = fdt[fd].offset;
+    fdt[fd].offset = 0;
     _tfs_read_bytes_fd(fd,src,s);
     ByteBuffer bb = ByteBuffer.wrap(src);
+    fdt[fd].offset = orig;
 
     // read bytes to extract directory entry values.
     // Ensure bytes are read in correc order
@@ -739,4 +775,81 @@ public class TFSFileSystem
     dst.put(buf,0,length);
   }
 
+  /*
+   * directory related utilities
+   */
+
+
+
+  /*
+   * miscellaneous
+   */
+  private static FileDescriptor __read_root() throws IOException {
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    byte tmp[] = new byte[BS];
+    ByteBuffer bb = ByteBuffer.wrap(tmp);
+    _tfs_read_block(0,tmp);
+    
+    int parent_block  = bb.getInt();
+    byte directory = bb.get();
+    byte name[] = new byte[16];
+    bb.get(name,0,16);
+    byte nlength = bb.get();
+    int block = bb.getInt();
+    int size = bb.getInt();
+    
+    return new FileDescriptor(parent_block,
+                              directory!=0,
+                              new String(name, 0, nlength),
+                              block,
+                              0,
+                              size);
+  }
+
+  private static int __create_fdt_entry(FileDescriptor fd) throws IOException {
+    int i = 0;
+    for (;i < fdt.length; ++i)
+      if (fdt[i] == null)
+        break;
+    if (i >= fdt.length)
+      throw new TFSException("No free entries in fdt");
+    fdt[i] = fd;
+    return i;
+  }
+  
+  private static FileDescriptor[] __read_directory(int fd) throws IOException {
+    if (fd < 0 || fd >= pcb_data_block_size || fdt[fd] == null)
+      throw new TFSException("Fd does not exists: " + fd);
+    if (fdt[fd].d == false)
+      throw new TFSException("File " + fdt[fd].name + " is not directory");
+
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    int n = fdt[fd].size/32; // num entries
+    FileDescriptor entries[] = new FileDescriptor[n];
+    byte src[] = new byte[n*BS];
+    int orig = fdt[fd].offset;
+    fdt[fd].offset = 0;
+    _tfs_read_bytes_fd(fdt[fd].block,src,src.length);
+    fdt[fd].offset = orig;
+    ByteBuffer bb = ByteBuffer.wrap(src);
+
+    for (int i = 0; i < n; ++i){
+      int      parent_block  = bb.getInt(); // - parent
+      byte     directory   = bb.get();      // - is directory
+      byte name[]     = new byte[16];     // - name
+      bb.get(name,0,16);
+      byte     nlength = bb.get();          // - name length
+      int      block = bb.getInt();         // - beginning of block
+      int      size = bb.getInt();          // - size
+      bb.get();
+      bb.get();
+      entries[i] = new FileDescriptor(parent_block,
+                                      directory!=0,
+                                      new String(name, 0, nlength),
+                                      block,
+                                      0,
+                                      size);
+    }
+    return entries;
+  }
 }
