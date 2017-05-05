@@ -72,10 +72,10 @@ import java.util.*;
 
   Table of abstract file handles used for accessing files. File manipulations
   such are read/write will be done onto FDT entries. Writing to FDT will make sure
-  data is written in block chunks. 
+  data is written in block chunks.
 
   Default to maximum 100 entries per table and fdt allocation will always allocate
-  the first available entry starting from index 0. Null values to FDT indicate 
+  the first available entry starting from index 0. Null values to FDT indicate
   free entry.
 
   A file entry will hold the following information about a file:
@@ -85,7 +85,7 @@ import java.util.*;
     int offset;   // file pointer offset in bytes
     int size;     // size of file in bytes
   *********************************************************************************
-  
+
 
 
 
@@ -463,7 +463,7 @@ public class TFSFileSystem
     // in-memory buffers
     ByteBuffer src = null;
     byte tmp[] = new byte[TFSDiskInputOutput.BLOCK_SIZE];
-      
+
     // get last block of the file
     int n = fdt[fd].size/TFSDiskInputOutput.BLOCK_SIZE;
     int block = fdt[fd].block;
@@ -484,7 +484,7 @@ public class TFSFileSystem
         .put(buf,0,length);
       src.flip(); // reset position to 0
     }
-    
+
     while (true){
       src.get(tmp,0,Math.min(src.remaining(),TFSDiskInputOutput.BLOCK_SIZE));
       _tfs_write_block(block,tmp);
@@ -508,7 +508,7 @@ public class TFSFileSystem
     return block;
   }
 
-  
+
   // Will assume fd is a directory. Also, it is the responsibility
   // of the caller to ensure passed array parameter lengths are
   // the number of entries in the fd directory.
@@ -533,7 +533,7 @@ public class TFSFileSystem
         first_block_no.length != s ||
         file_size.length != s)
       return -1;
-    
+
     byte src[] = new byte[s];
 
     // read directory into memory
@@ -662,6 +662,13 @@ public class TFSFileSystem
     return fsl.poll();
   }
 
+  private static void _tfs_return_block_fat(int block_no) throws IOException {
+    if (block_no < 0 || block_no >= pcb_data_block_size)
+      throw new TFSException("Attempt to free non-existent block " + block_no);
+    fat[block_no] = 0;
+    fsl.add(block_no);
+  }
+
   private static int _tfs_attach_block_fat(int start_block_no, int new_block_no) throws IOException {
     // check block numbers are not out of bounds
     if (start_block_no < 0 || start_block_no >= pcb_data_block_size ||
@@ -682,7 +689,7 @@ public class TFSFileSystem
     ByteBuffer src = ByteBuffer.wrap(block);
     return src.getInt(offset);
   }
-  
+
   private static void _tfs_put_int_block(byte[] block, int offset, int data) throws IOException {
     if (block.length != TFSDiskInputOutput.BLOCK_SIZE)
       throw new TFSException("Byte buffer length not equal to block size.");
@@ -691,7 +698,7 @@ public class TFSFileSystem
     ByteBuffer dst = ByteBuffer.wrap(block);
     dst.putInt(offset,data);
   }
-  
+
   private static byte _tfs_get_byte_block(byte[] block, int offset)  throws IOException {
     if (block.length != TFSDiskInputOutput.BLOCK_SIZE)
       throw new TFSException("Byte buffer length not equal to block size.");
@@ -700,7 +707,7 @@ public class TFSFileSystem
     ByteBuffer src = ByteBuffer.wrap(block);
     return src.get(offset);
   }
-  
+
   private static void _tfs_put_byte_block(byte[] block, int offset, byte data) throws IOException {
     if (block.length != TFSDiskInputOutput.BLOCK_SIZE)
       throw new TFSException("Byte buffer length not equal to block size.");
@@ -709,7 +716,7 @@ public class TFSFileSystem
     ByteBuffer dst = ByteBuffer.wrap(block);
     dst.put(offset,data);
   }
-  
+
   private static byte[] _tfs_get_bytes_block(byte[] block, int offset, int length) throws IOException {
     if (block.length != TFSDiskInputOutput.BLOCK_SIZE)
       throw new TFSException("Byte buffer length not equal to block size.");
@@ -721,7 +728,7 @@ public class TFSFileSystem
     src.get(tmp);
     return tmp;
   }
-  
+
   private static void _tfs_put_bytes_block(byte[] block, int offset, byte[] buf, int length) throws IOException {
     if (block.length != TFSDiskInputOutput.BLOCK_SIZE)
       throw new TFSException("Byte buffer length not equal to block size.");
@@ -731,5 +738,5 @@ public class TFSFileSystem
     dst.position(offset);
     dst.put(buf,0,length);
   }
-  
+
 }
