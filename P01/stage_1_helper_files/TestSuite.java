@@ -121,8 +121,8 @@ public class TestSuite {
     assertEquals((byte) 1, r.readByte());
     r.readFully(name);
     assertEquals(true,Arrays.equals(name, new byte[16]));
-    assertEquals((byte) 0, r.readByte());
-    assertEquals((byte) 0, r.readByte());
+    assertEquals(0, r.readInt());
+    assertEquals(0, r.readInt());
     r.readFully(padding);
     assertEquals(true,Arrays.equals(padding, new byte[2]));
   }

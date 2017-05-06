@@ -198,13 +198,13 @@ public class TFSFileSystem
 
     // Write directory entry into first data block
     ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
-    buffer.putInt(0);              // int      parent_block - root is parent to itself
-    buffer.put((byte) 1);          // byte     directory    - root is directory
-    buffer.put(new byte[16]);      // byte[16] name         - root has no name
-    buffer.put((byte) 0);          // byte     nlength      - root's name is length 0
-    buffer.put((byte) 0);          // int      block        - null pointer
-    buffer.put((byte) 0);          // int      size         - root directory is initially empty
-    buffer.put(new byte[2]);       // byte[2]  padding
+    buffer.putInt(0);              // 0  int      parent_block - root is parent to itself
+    buffer.put((byte) 1);          // 4  byte     directory    - root is directory
+    buffer.put(new byte[16]);      // 5  byte[16] name         - root has no name
+    buffer.put((byte) 0);          // 21 byte     nlength      - root's name is length 0
+    buffer.putInt(0);              // 22   int      block        - null pointer
+    buffer.putInt(0);              // 26 int      size         - root directory is initially empty
+    buffer.put(new byte[2]);       // 30 byte[2]  padding
     TFSDiskInputOutput.tfs_dio_write_block(pcb_data_block_root,buffer.array());
 
     TFSDiskInputOutput.tfs_dio_close();
@@ -443,4 +443,44 @@ public class TFSFileSystem
       }
     }
   }
+
+  /*
+   * File related - private helpers
+   */
+  private static int get_block() throws IOException {
+    if (free_ptr == -1)
+      throw new TFSException("No free space available");
+    int n = free_ptr;
+    free_ptr = fat[free_ptr];
+    return n;
+  }
+
+  private static void free_blocks(int s, int e){
+    fat[e] = free_ptr;
+    free_ptr = s;
+  }
+
+  private static void read_block(int block, byte buf[]) throws IOException {
+    TFSDiskInputOutput.tfs_dio_read_block(block,buf);
+  }
+
+  private static void write_block(int block, byte buf[]) throws IOException
+  {
+    TFSDiskInputOutput.tfs_dio_write_block(block,buf);
+  }
+
+  /*
+   * File related - public methods
+   */
+  // public static FileD read_dir(int block) throws IOException {
+  //   int BS = TFSDiskInputOutput.BLOCK_SIZE;
+  //   ByteBuffer b = ByteBuffer.allocate(BS);
+  //   read_block(block,b.array());
+  //   // first block of directory file
+  //   b.position(
+  //   int fblock = 
+  // }
+
+  
+  
 }
