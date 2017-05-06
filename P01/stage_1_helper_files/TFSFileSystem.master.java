@@ -139,7 +139,7 @@ public class TFSFileSystem
     public FileDescriptor(int p, int p_offset, int p_size, boolean d,
                           String name, int block, int offset, int size){
       this.p = p;
-      this.p_offset = p_offset;
+      this.p_offset = p_offset
       this.root_offset = root_offset;
       this.d = d;
       this.name = name;
@@ -421,6 +421,8 @@ public class TFSFileSystem
       throw new TFSException("Index out of bounds.");
     if (fdt[fd] == null)
       throw new TFSException("Attempt to close unopen fd: " + fd);
+    fdt[fd].parent;
+      
       
     fdt[fd] = null;
   }
@@ -721,7 +723,7 @@ public class TFSFileSystem
 
   /*
    * directory related utilities
-   */
+   */p
 
 
   /*
