@@ -495,15 +495,32 @@ public class TFSFileSystem
     int len = buf.length;
 
     // check if new blocks must be allocated
-    // note: the equation (a+b)/b-1 performs ceiling(a/b)-1 to ensure
-    // we get the block of where the offset 'a' resides EVEN if the offset
-    // happens to align with block size. floor(a/b) will go over in 
-    // block if 'a' is a multiple of block size.
-
-    int n = ((fd.offset+len+BS-1)/BS-1) - ((fd.size+BS-1)/BS-1);
+    // 1) watch for edge case when writing aligns with block size
+    // 2) watch for edge case when size aligns with block size
+    int n = ((fd.offset+len+BS-1)/BS) - ((fd.size+BS-1)/BS);
     if (n > 0){
-      
+      int block = fd.block;
+      for (int i = 0; i < (fd.size-1)/BS; ++i) // (a+b-1)/b - 1 => (a-1)/b
+        block = fat[block];
+      int c = free_ptr;
+      for (int i = 0; i < n-1; ++i){
+        c = fat[free_ptr];
+      }
+      fat[block] = free_ptr;
+      free_ptr = fat[c];
+      fat[c] = -1;
     }
+
+    ByteBuffer b = ByteBuffer.allocate(((fd.offset%BS+length+BS-1)/BS)*BS);
+    // move to block of offset
+    int block = fd.block;
+    for (int i = 0; i < fd.offset/BS; ++i) // it is okay if offset aligns with block
+      block = fat[block];
+
+    // write data to buffer
+    for (int i = 0; i < fd.offset
+    
+    
   }
 
   /*
