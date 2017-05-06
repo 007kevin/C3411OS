@@ -202,7 +202,7 @@ public class TFSFileSystem
     buffer.put((byte) 1);          // 4  byte     directory    - root is directory
     buffer.put(new byte[16]);      // 5  byte[16] name         - root has no name
     buffer.put((byte) 0);          // 21 byte     nlength      - root's name is length 0
-    buffer.putInt(0);              // 22   int      block        - null pointer
+    buffer.putInt(0);              // 22 int      block        - null pointer
     buffer.putInt(0);              // 26 int      size         - root directory is initially empty
     buffer.put(new byte[2]);       // 30 byte[2]  padding
     TFSDiskInputOutput.tfs_dio_write_block(pcb_data_block_root,buffer.array());
@@ -469,18 +469,61 @@ public class TFSFileSystem
     TFSDiskInputOutput.tfs_dio_write_block(block,buf);
   }
 
+  private static void read_fd(FileD fd, byte buf[]) throws IOException {
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    int len = buf.length;
+
+    // move to block of offset
+    int block = fd.block;
+    for (int i = 0; i < fd.offset/BS; ++i)
+      block = fat[block];
+
+    int ceil = (fd.offset%BS+len+BS-1)/BS;
+    ByteBuffer b = ByteBuffer.allocate(ceil*BS);
+    byte[] tmp = new byte[BS];
+    for (int i = 0; i < ceil; ++i){
+      read_block(block,tmp);
+      b.put(tmp);
+      block=fat[block];
+    }
+    ByteBuffer dst = ByteBuffer.wrap(buf);
+    dst.put(b.array(),fd.offset%BS,len);
+  }
+
+  private static void write_fd(FileD fd, byte buf[]) throws IOException {
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    int len = buf.length;
+
+    // check if new blocks must be allocated
+    // note: the equation (a+b)/b-1 performs ceiling(a/b)-1 to ensure
+    // we get the block of where the offset 'a' resides EVEN if the offset
+    // happens to align with block size. floor(a/b) will go over in 
+    // block if 'a' is a multiple of block size.
+
+    int n = ((fd.offset+len+BS-1)/BS-1) - ((fd.size+BS-1)/BS-1);
+    if (n > 0){
+      
+    }
+  }
+
   /*
    * File related - public methods
    */
-  // public static FileD read_dir(int block) throws IOException {
+  
+  
+  // public static FileD[] read_root() throws IOException {
   //   int BS = TFSDiskInputOutput.BLOCK_SIZE;
   //   ByteBuffer b = ByteBuffer.allocate(BS);
-  //   read_block(block,b.array());
-  //   // first block of directory file
-  //   b.position(
-  //   int fblock = 
+  //   read_block(0,b.array());
+  //   b.position(22); 
+  //   int fblock = b.getInt();
+  //   int fsize = b.getInt();
+  //   b = ByteBuffer.allocate(((fsize+BS-1)/BS)*BS);
+  //   for (int i = 0; i < fsize/BS; ++i){
+  //     byte tmp[] = new byte[BS];
+  //     read_block(fblock,tmp);
+  //     fblock = fat[fblock];
+  //   }
   // }
-
-  
   
 }
