@@ -19,13 +19,15 @@ import java.util.*;
     pcb_size            - number of blocks allocated to PCB
     pcb_fs_size         - total number of blocks in the TFS Disk
     pcb_fat_root        - first block of the FAT
-    pcb_fat_size        - the number of index blocks in the FAT table. values will range
-                          from [0, m -n]. Index value 0 can be used as null pointer since
-                          it will hold the root directory by default (We will assume we
-                          never want to delete the root directory because if we did, there
-                          would be no entry point for the file system when mounting).
+    pcb_fat_size        - the number of index blocks in the FAT table values will range
+                          from [0, m -n]. Index value -1 can be used as null pointer.
+                          We will assume we never want to delete the root directory
+                          because if we did, there would be no entry point for the
+                          file system when mounting.
     pcb_data_block_root - first block of the data block
     pcb_data_block_size - number of blocks allocated to data blocks
+    free_ptr            - pointer to first free block. File system initialization
+                          will set this to 1 by default
 
 
   FAT will be in block 1. Additional blocks may be allocated depending on the size
@@ -35,10 +37,7 @@ import java.util.*;
   by data_block_root when requesting disk for the specific block.
 
   Free-space allocation:
-  Since the FAT will have to be read from memory anyways, the free-space list
-  can be built when mounting the fs with no additonal cost. As the
-  FAT is read into memory, any null valued entries (i.e 0) can be added to the free-space
-  list.
+  Free space list will be a linked list in the fat initialized during mkfs.
 
   Data Blocks will hold the files. Directory structure is also included here since
   directories can be regarded as files. The first block (i.e block n) will be the root
@@ -67,10 +66,25 @@ import java.util.*;
   way up to the TFSShell class so any thrown exceptions can be handled in one place.
   Also, the code is more readable without the try-catch clauses
 
+  *********************************************************************************
   FDT - File Descriptor Table
-  
-   
-  
+
+  Table of abstract file handles used for accessing files. File manipulations
+  such are read/write will be done onto FDT entries. Writing to FDT will make sure
+  data is written in block chunks.
+
+  Default to maximum 100 entries per table and fdt allocation will always allocate
+  the first available entry starting from index 0. Null values to FDT indicate
+  free entry.
+
+  A file entry will hold the following information about a file:
+    boolean d;    // directory flag
+    String name;  //file name
+    int block;    // first block number of the file
+    int offset;   // file pointer offset in bytes
+    int size;     // size of file in bytes
+  *********************************************************************************
+
 
  ****************************************************/
 
@@ -94,6 +108,16 @@ public class TFSFileSystem
   private static int pcb_data_block_root; // pcb_size+pcb_fat_size
   private static int pcb_data_block_size; // 1024
 
+  /**********************************
+   * Free Space List (stored in PCB *
+   **********************************/
+  // free space list will point to index 1 of FAT during file system initialization.
+  private static int free_ptr;
+
+
+
+
+
   /***************************
    * File Allocation Table   *
    ***************************/
@@ -109,14 +133,30 @@ public class TFSFileSystem
   /***************************
    * File Descriptor Table   *
    ***************************/
-  private class FileDescriptor {
-    
+  private class FileD {
+    int p; // beginning of block for entry
+    int p_offset; // offset to entry from root
+    int p_size; // size of parent
+    boolean d; // directory flag
+    String name; //file name
+    int block;  // first block number of the file
+    int offset; // file pointer offset in bytes
+    int size; // size of file in bytes
 
+    public FileD(int p, int p_offset, int p_size, boolean d,
+                          String name, int block, int offset, int size){
+      this.p = p;
+      this.p_offset = p_offset;
+      this.p_size = p_size;
+      this.d = d;
+      this.name = name;
+      this.block = block;
+      this.offset = offset;
+      this.size = size;
+    }
   }
-  
-  private static FileDescriptor fdt[] = null;
-  
 
+  private static FileD fdt[] = null;
 
   /*
    * TFS API
@@ -135,11 +175,15 @@ public class TFSFileSystem
     pcb_fat_size    = 32;
     pcb_data_block_root = pcb_size+pcb_fat_size;
     pcb_data_block_size = 1024;
+    free_ptr            = 1;
                     // default initializes to 0 by Java Lang. Spec
     fat             = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
-                    // default initialize java objects to null
-    fdt             = new FileDescriptor[100];
-    
+
+    // build free space list
+    for (int i = 1; i < pcb_data_block_size-1; ++i)
+      fat[i] = i+1;
+    fat[pcb_data_block_size-1] = -1; // end free space list
+
     // Create disk file with default values
     TFSDiskInputOutput.tfs_dio_create(TFSDiskFile.getBytes(),
                                       TFSDiskFile.length(),
@@ -149,10 +193,8 @@ public class TFSFileSystem
     TFSDiskInputOutput.tfs_dio_open(TFSDiskFile.getBytes(),TFSDiskFile.length());
     // set mount flag not utility functions can write to disk
     fs_mounted = true;
-    // Write pcb to disk
-    _tfs_write_pcb();
-    // Write fat to disk
-    _tfs_write_fat();
+    // Write pcb and fat to disk
+    tfs_sync();
 
     // Write directory entry into first data block
     ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
@@ -179,6 +221,11 @@ public class TFSFileSystem
 
     TFSDiskInputOutput.tfs_dio_open(TFSDiskFile.getBytes(),TFSDiskFile.length());
     fs_mounted = true;
+
+                      // default initialize java objects to null
+    fdt             = new FileD[100];
+
+
     // note: PCB should always be read first since read_fat needs the values from the PCB
     _tfs_read_pcb();
     _tfs_read_fat();
@@ -191,6 +238,7 @@ public class TFSFileSystem
       throw new TFSException("File system already unmounted");
     if (!TFSDiskInputOutput.is_open())
       throw new TFSException("Disk is closed. Cannot write memory out to disk");
+    fdt = null;
     _tfs_write_pcb();
     _tfs_write_fat();
     TFSDiskInputOutput.tfs_dio_close();
@@ -205,9 +253,11 @@ public class TFSFileSystem
     return 0;
   }
 
-  public static int tfs_sync()
+  public static int tfs_sync() throws IOException
   {
-    return -1;
+    _tfs_write_pcb();
+    _tfs_write_fat();
+    return 0;
   }
 
   // Print PCB and FAT in the file system (disk)
@@ -248,6 +298,16 @@ public class TFSFileSystem
     output+="Data Blocks:\n";
     output+="  root = " + disk_pcb_data_block_root + "\n";
     output+="  size = " + disk_pcb_data_block_size + "\n";
+    output+="Free Space:\n";
+    output+="  free_ptr = " + free_ptr + "\n";
+
+    int num = 0;
+    int ptr = free_ptr;
+    while(ptr != -1){
+      num++;
+      ptr=fat[ptr];
+    }
+    output+="  free bytes = " + num + "\n";
 
     return output;
   }
@@ -261,7 +321,7 @@ public class TFSFileSystem
       throw new TFSException("Cannot print records. Disk not open");
 
     String output = "";
-    output+="Memory\n";    
+    output+="Memory\n";
     output+="  +---------+---------+-----------------------------------+\n";
     output+="  |         |         |                                   |\n";
     output+="  |   PCB   |   FAT   |   Data Blocks                     |\n";
@@ -279,90 +339,19 @@ public class TFSFileSystem
     output+="Data Blocks:\n";
     output+="  root = " + pcb_data_block_root + "\n";
     output+="  size = " + pcb_data_block_size + "\n";
-
+    output+="Free Space:\n";
+    output+="  free_ptr = " + free_ptr + "\n";
+    int num = 0;
+    int ptr = free_ptr;
+    while(ptr != -1){
+      num++;
+      ptr=fat[ptr];
+    }
+    output+="  free bytes = " + num + "\n";
+    
     return output;
   }
 
-  public static int tfs_open(byte[] name, int nlength)
-  {
-    return -1;
-  }
-
-  public static int tfs_read(int file_id, byte[] buf, int blength)
-  {
-
-    return -1;
-  }
-
-  public static int tfs_write(int file_id, byte[] buf, int blength)
-  {
-    return -1;
-  }
-
-  public static int tfs_seek(int file_id, int position)
-  {
-    return -1;
-  }
-
-  public static void tfs_close(int file_id)
-  {
-    return;
-  }
-
-  public static int tfs_create(byte[] name, int nlength)
-  {
-    return -1;
-  }
-
-  public static int tfs_delete(byte[] name, int nlength)
-  {
-    return -1;
-  }
-
-  public static int tfs_create_dir(byte[] name, int nlength)
-  {
-    return -1;
-  }
-
-  public static int tfs_delete_dir(byte[] name, int nlength)
-  {
-    return -1;
-  }
-
-
-  /*
-   * TFS private methods to handle in-memory structures
-   */
-
-  private static int _fs_read_block(int block_no, byte buf[])
-  {
-    return -1;
-  }
-
-  private static int _tfs_write_block(int block_no, byte buf[])
-  {
-    return -1;
-  }
-
-  private static int _tfs_open_fd(byte name[], int nlength)
-  {
-    return -1;
-  }
-
-  private static int _tfs_seek_fd(int fd, int offset)
-  {
-    return -1;
-  }
-
-  private static void _tfs_close_fd(int fd)
-  {
-    return;
-  }
-
-  private static int _tfs_get_block_no_fd(int fd, int offset)
-  {
-    return -1;
-  }
 
   /*
    * PCB related utilities
@@ -383,6 +372,7 @@ public class TFSFileSystem
     buffer.putInt(pcb_fat_size);
     buffer.putInt(pcb_data_block_root);
     buffer.putInt(pcb_data_block_size);
+    buffer.putInt(free_ptr);
     TFSDiskInputOutput.tfs_dio_write_block(pcb_root,buffer.array());
   }
 
@@ -403,6 +393,7 @@ public class TFSFileSystem
     pcb_fat_size = bb.getInt();
     pcb_data_block_root = bb.getInt();
     pcb_data_block_size = bb.getInt();
+    free_ptr = bb.getInt();
   }
 
   /*

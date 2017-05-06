@@ -17,7 +17,7 @@ public class TestSuite {
     /*
      * DISK CLEANUP ROUTINE
      */
-    TFSFileSystem.tfs_exit();    
+    TFSFileSystem.tfs_exit();
     File f = new File(DBNAME);
     if (f.exists())
       f.delete();
@@ -86,8 +86,9 @@ public class TestSuite {
     int pcb_fat_size        = 32;
     int pcb_data_block_root = pcb_size+pcb_fat_size;
     int pcb_data_block_size = 1024;
+    int free_ptr = 1;
 
-    int[] values = new int[7];
+    int[] values = new int[8];
     values[0] = pcb_root;
     values[1] = pcb_size;
     values[2] = pcb_fs_size;
@@ -95,18 +96,22 @@ public class TestSuite {
     values[4] = pcb_fat_size;
     values[5] = pcb_data_block_root;
     values[6] = pcb_data_block_size;
+    values[7] = free_ptr;
 
     // assert default values for PCB are written correcly
     r.seek(pcb_root);
-    for (int i = 0; i < 7; ++i){
+    for (int i = 0; i < 8; ++i){
       assertEquals(r.readInt(), values[i]);
     }
 
     // assert the default values for FAT are correctly written
     r.seek(pcb_fat_root*TFSDiskInputOutput.BLOCK_SIZE);
-    for (int i = 0; i < pcb_data_block_size; ++i){
-      assertEquals(0,r.readInt()); // values in fat should be 0
+    assertEquals(0,r.readInt()); // index 0 of fat always points to block 0
+    for (int i = 2; i < pcb_data_block_size; ++i){
+      assertEquals(i,r.readInt()); // values in fat equal i
     }
+    // assert free space list ends in null
+    assertEquals(-1,r.readInt());
 
     // assert the default values for directory are written correctly
     r.seek(pcb_data_block_root*TFSDiskInputOutput.BLOCK_SIZE);
@@ -128,23 +133,23 @@ public class TestSuite {
     TFSFileSystem.tfs_mount();
     assertEquals(true, TFSDiskInputOutput.is_open());
     TFSFileSystem.tfs_umount();
-    assertEquals(false, TFSDiskInputOutput.is_open());    
+    assertEquals(false, TFSDiskInputOutput.is_open());
   }
 
   @Ignore
-  public void tfs_prrfs() throws IOException { 
+  public void tfs_prrfs() throws IOException {
     TFSFileSystem.tfs_mkfs();
     TFSFileSystem.tfs_mount();
     System.out.println(TFSFileSystem.tfs_prrfs());
   }
 
   @Ignore
-  public void tfs_prmfs() throws IOException { 
+  public void tfs_prmfs() throws IOException {
     TFSFileSystem.tfs_mkfs();
     TFSFileSystem.tfs_mount();
     System.out.println(TFSFileSystem.tfs_prmfs());
   }
-  
+
 
   @Ignore
   public void tfs_exit() throws IOException {
