@@ -3,10 +3,9 @@ import java.util.*;
 
 public class TFSShell extends Thread  
 {
-  String wdir; // working directory
+  String wdir = ""; // working directory
   public TFSShell()
   {
-    wdir = "/";
   }
 	
   public void run()
@@ -28,7 +27,7 @@ public class TFSShell extends Thread
 		
     while(true) {
       try {
-        System.out.print("ush> ");
+        System.out.print("ush " + wdir + "> ");
 			
         line = scanner.nextLine();
         line = line.trim();
@@ -51,6 +50,8 @@ public class TFSShell extends Thread
           else if (cmd.equals("mkdir")) {
             if (stokenizer.hasMoreTokens()) {
               arg1 = stokenizer.nextToken();
+              if (arg1.charAt(0) != '/')
+                arg1 = wdir + "/" +arg1;
               mkdir(arg1);					
             }
             else
@@ -67,10 +68,25 @@ public class TFSShell extends Thread
           else if (cmd.equals("ls")) {
             if (stokenizer.hasMoreTokens()) {
               arg1 = stokenizer.nextToken();
-              ls(arg1);					
+              ls(arg1);
             }
             else
               ls(wdir);
+          }
+          else if (cmd.equals("cd")) {
+            if (stokenizer.hasMoreTokens()) {
+              arg1 = stokenizer.nextToken();
+              switch (arg1) {
+              case "..":
+                if (!wdir.equals("/"))
+                  wdir = new File(wdir).getParent();
+                break;
+              default:
+                wdir+=(wdir.equals("/")?"":"/")+arg1;
+              }
+            }
+            else
+              System.out.println("Usage: change current directory");
           }
           else if (cmd.equals("create")) {
             if (stokenizer.hasMoreTokens()) {
@@ -173,7 +189,8 @@ public class TFSShell extends Thread
             System.out.println("-ush: " + cmd + ": command not found");
         }
       } catch (IOException e){
-        System.out.println(e.getMessage());
+        // System.out.println(e.getMessage());
+        e.printStackTrace();
       }
     }
   }
@@ -192,11 +209,13 @@ public class TFSShell extends Thread
   void mount() throws IOException
   {
     TFSFileSystem.tfs_mount();
+    wdir = "/";
     return;
   }
 	
   void sync() throws IOException
   {
+    TFSFileSystem.tfs_sync();
     return;
   }
 	
@@ -214,6 +233,7 @@ public class TFSShell extends Thread
 	
   void mkdir(String directory) throws IOException
   {
+    TFSFileSystem.mkdir(directory);
     return;
   }
 	
@@ -228,6 +248,8 @@ public class TFSShell extends Thread
     String names[] = TFSFileSystem.read_path_names(directory);
     for (int i = 0; i < names.length; ++i)
       output += names[i] + " ";
+    if (output.length() != 0)
+      System.out.println(output);
     return;
   }
 	

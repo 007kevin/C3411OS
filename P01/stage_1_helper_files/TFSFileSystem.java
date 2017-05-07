@@ -134,20 +134,18 @@ public class TFSFileSystem
    * File Descriptor Table   *
    ***************************/
   private static class FileD {
-    int p; // beginning of block for entry
-    int p_offset; // offset to entry from root
-    int p_size; // size of parent
+    FileD p; // parent entry
+    int p_offset; // offset to entry from parent
     boolean d; // directory flag
     String name; //file name
     int block;  // first block number of the file
     int offset; // file pointer offset in bytes
     int size; // size of file in bytes
 
-    public FileD(int p, int p_offset, int p_size, boolean d,
-                          String name, int block, int size){
+    public FileD(FileD p, int p_offset, boolean d,
+                 String name, int block, int size){
       this.p = p;
       this.p_offset = p_offset;
-      this.p_size = p_size;
       this.d = d;
       this.name = name;
       this.block = block;
@@ -494,7 +492,13 @@ public class TFSFileSystem
     int BS = TFSDiskInputOutput.BLOCK_SIZE;
     int len = buf.length;
 
-    // check if new blocks must be allocated
+    // If file has no blocks allocated
+    if (fd.size == 0){
+      fd.block = get_block();
+      fd.size = Math.min(BS,len);
+    }
+
+    // check if new blocks must still be allocated
     // 1) watch for edge case when writing aligns with block size
     // 2) watch for edge case when size aligns with block size
     int n = ((fd.offset+len+BS-1)/BS) - ((fd.size+BS-1)/BS);
@@ -533,6 +537,7 @@ public class TFSFileSystem
 
     b.position(fd.offset%BS);
     b.put(buf,0,len);
+    b.position(0);
 
     // write data back to disk
     block = offset_block;
@@ -549,13 +554,40 @@ public class TFSFileSystem
     if (fd.offset > fd.size)
       fd.size = fd.offset;
 
+    //    fd.update();
   }
 
-  /*
-   * File related - public methods
-   */
+  // propagate up directory tree and update file size changes
+  private static void update_fd(FileD fd) throws IOException {
+    if (fd.p == null){
+      int BS = TFSDiskInputOutput.BLOCK_SIZE;
+      ByteBuffer b = ByteBuffer.allocate(BS);
+      read_block(0,b.array());
+      b.position(22);
+      b.putInt(fd.block);
+      b.putInt(fd.size);
+      write_block(0,b.array());
+      return;
+    }
 
-  public static FileD root() throws IOException {
+    // set up buffer for writing
+    ByteBuffer b = ByteBuffer.allocate(32);
+    b.putInt(fd.p.block);
+    b.put((byte) (fd.d?1:0));
+    b.put(ByteBuffer.allocate(16).put(fd.name.getBytes()).array());
+    b.put((byte) fd.name.length());
+    b.putInt(fd.block); // block
+    b.putInt(fd.size); //size
+
+    // write into appropriate parent directory
+    int orig = fd.p.offset;
+    fd.p.offset = fd.p_offset;
+    write_fd(fd.p,b.array());
+    fd.p.offset = orig;
+    update_fd(fd.p);
+  }
+
+  private static FileD root() throws IOException {
     int BS = TFSDiskInputOutput.BLOCK_SIZE;
 
     // read root's first block and size
@@ -565,12 +597,12 @@ public class TFSFileSystem
     int fblock = b.getInt();
     int fsize = b.getInt();
 
-    // root has no parent to update thus p, p_offset, p_size is 0
-    return new FileD(0,0,0,true,"",fblock,fsize);
+    // root has no parent to update thus null
+    return new FileD(null,0,true,"",fblock,fsize);
   }
 
-  public static FileD[] read_dir(FileD fd) throws IOException {
-    if (!fd.d) throw new TFSException(fd.name + "is not a directory");
+  private static FileD[] read_dir(FileD fd) throws IOException {
+    if (!fd.d) throw new TFSException(fd.name + " is not a directory");
     int BS = TFSDiskInputOutput.BLOCK_SIZE;
     FileD entries[];
 
@@ -581,7 +613,7 @@ public class TFSFileSystem
     // read blocks into buffer
     fd.offset = 0;
     ByteBuffer b = ByteBuffer.allocate(fsize);
-    
+
     read_fd(fd,b.array());
 
     // read into entries array
@@ -596,9 +628,8 @@ public class TFSFileSystem
       b.get();
       b.get();                      // 32
 
-      entries[i] = new FileD(p,
+      entries[i] = new FileD(fd,
                              i*32,
-                             fsize,
                              d,
                              new String(name,0,nlength),
                              eblock,
@@ -607,34 +638,55 @@ public class TFSFileSystem
     return entries;
   }
 
-
-
-  public static FileD[] read_path(String dir) throws IOException {
+  // retrieve entry of the file path
+  private static FileD read_entry(String dir) throws IOException {
     if (dir.length() == 0 || dir.charAt(0) != '/')
       throw new TFSException("Invalid path: " + dir);
-    FileD[] cur = read_dir(root());
+    FileD cur = root();
     String names[] = dir.split("/");
     for (int i = 1; i < names.length; ++i){
-      FileD next = null;
-      for (int j = 0 ; j < cur.length; ++j)
-        if (cur[j].name.equals(names[i])){
-          next = cur[j];
+      FileD entries[] = read_dir(cur);
+      int j = 0;
+      for (;j < entries.length; ++j){
+        if (entries[j].name.equals(names[i]))
           break;
-        }
-      if (next == null)
+      }
+      if (j == entries.length)
         throw new IOException(dir + ": No such file or directory");
-      cur = read_dir(next);
+      cur = entries[j];
     }
     return cur;
   }
 
+  /*
+   * File related - public methods
+   */
+
   public static String[] read_path_names (String dir) throws IOException {
-    FileD[] entries = read_path(dir);
+    FileD[] entries = read_dir(read_entry(dir));
     String names[] = new String[entries.length];
     for (int i = 0; i < entries.length; ++i){
-      names[i] = (entries[i].d?"*":"")+entries[i].name;
+      names[i] = (entries[i].d?"\033[0;1m":"")+entries[i].name;
     }
     return names;
+  }
+
+  public static void mkdir (String directory) throws IOException {
+    File f = new File(directory);
+    String name = f.getName();
+    FileD parent = read_entry(f.getParent());
+    FileD[] entries = read_dir(parent);
+    for (int i = 0; i < entries.length; ++i){
+      if (entries[i].d && entries[i].name.equals(name))
+        throw new TFSException(name + " already exists");
+    }
+    FileD child = new FileD(parent,
+                            entries.length*32,
+                            true,
+                            name,
+                            0,
+                            0);
+    update_fd(child); // reflect changes in parent directory so child is searchable
   }
 
   /*
