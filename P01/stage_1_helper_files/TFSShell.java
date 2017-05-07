@@ -76,14 +76,7 @@ public class TFSShell extends Thread
           else if (cmd.equals("cd")) {
             if (stokenizer.hasMoreTokens()) {
               arg1 = stokenizer.nextToken();
-              switch (arg1) {
-              case "..":
-                if (!wdir.equals("/"))
-                  wdir = new File(wdir).getParent();
-                break;
-              default:
-                wdir+=(wdir.equals("/")?"":"/")+arg1;
-              }
+              cd(arg1);
             }
             else
               System.out.println("Usage: change current directory");
@@ -199,6 +192,24 @@ public class TFSShell extends Thread
   /*
    * You need to implement these commands
    */
+  String absolutify(String directory){
+    if (directory.charAt(0) == '/')
+      return directory;
+    return wdir + (wdir.equals("/")?"":"/") + directory;
+  }
+
+  void cd(String directory) throws IOException {
+    if (directory.equals("..")){
+      if (!wdir.equals("/"))
+        wdir = new File(wdir).getParent();
+      return;
+    }
+    directory = absolutify(directory);
+    // check directory exists
+    TFSFileSystem.read_path_names(directory);
+    wdir = directory;
+    return;
+  }
  	
   void mkfs() throws IOException
   {
