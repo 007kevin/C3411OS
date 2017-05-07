@@ -39,6 +39,8 @@ public class TFSShell extends Thread
             mkfs();
           else if (cmd.equals("mount"))
             mount();
+          else if (cmd.equals("umount"))
+            umount();          
           else if (cmd.equals("sync"))
             sync();
           else if (cmd.equals("prrfs"))
@@ -223,6 +225,14 @@ public class TFSShell extends Thread
     wdir = "/";
     return;
   }
+
+  void umount() throws IOException
+  {
+    TFSFileSystem.tfs_umount();
+    wdir = "";
+    return;
+  }
+  
 	
   void sync() throws IOException
   {
@@ -296,6 +306,7 @@ public class TFSShell extends Thread
 	
   void exit() throws IOException
   {
+    umount();
     return;
   }
 }

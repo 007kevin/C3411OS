@@ -261,7 +261,7 @@ public class TFSFileSystem
   // Print PCB and FAT in the file system (disk)
   public static String tfs_prrfs() throws IOException
   {
-    if (!fs_mounted)
+    if (!fs_mnounted)
       throw new TFSException("Cannot print records. File system not mounted");
     if (!TFSDiskInputOutput.is_open())
       throw new TFSException("Cannot print records. Disk not open");
@@ -364,7 +364,7 @@ public class TFSFileSystem
     ByteBuffer buffer = ByteBuffer.allocate(TFSDiskInputOutput.BLOCK_SIZE);
     // Write pcb to disk
     buffer.putInt(pcb_root);
-    buffer.putInt(pcb_size);
+    buffer.putvInt(pcb_size);
     buffer.putInt(pcb_fs_size);
     buffer.putInt(pcb_fat_root);
     buffer.putInt(pcb_fat_size);
@@ -687,6 +687,10 @@ public class TFSFileSystem
                             0,
                             0);
     update_fd(child); // reflect changes in parent directory so child is searchable
+  }
+
+  public static void rmdir (String directory) throws IOException {
+    
   }
 
   /*
