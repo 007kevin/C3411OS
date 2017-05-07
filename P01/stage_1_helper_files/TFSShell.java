@@ -224,7 +224,10 @@ public class TFSShell extends Thread
 	
   void ls(String directory) throws IOException
   {
-    System.out.println(wdir);
+    String output = "";
+    String names[] = TFSFileSystem.read_path_names(directory);
+    for (int i = 0; i < names.length; ++i)
+      output += names[i] + " ";
     return;
   }
 	

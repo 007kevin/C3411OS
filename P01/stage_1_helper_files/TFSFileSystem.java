@@ -144,14 +144,14 @@ public class TFSFileSystem
     int size; // size of file in bytes
 
     public FileD(int p, int p_offset, int p_size, boolean d,
-                          String name, int block, int offset, int size){
+                          String name, int block, int size){
       this.p = p;
       this.p_offset = p_offset;
       this.p_size = p_size;
       this.d = d;
       this.name = name;
       this.block = block;
-      this.offset = offset;
+      this.offset = 0;
       this.size = size;
     }
   }
@@ -175,7 +175,7 @@ public class TFSFileSystem
     pcb_fat_size    = 32;
     pcb_data_block_root = pcb_size+pcb_fat_size;
     pcb_data_block_size = 1024;
-    free_ptr            = 1;
+    free_ptr            =  1;
                     // default initializes to 0 by Java Lang. Spec
     fat             = new int[(pcb_fat_size*TFSDiskInputOutput.BLOCK_SIZE)/4];
 
@@ -348,7 +348,7 @@ public class TFSFileSystem
       ptr=fat[ptr];
     }
     output+="  free bytes = " + num + "\n";
-    
+
     return output;
   }
 
@@ -461,12 +461,12 @@ public class TFSFileSystem
   }
 
   private static void read_block(int block, byte buf[]) throws IOException {
-    TFSDiskInputOutput.tfs_dio_read_block(block,buf);
+    TFSDiskInputOutput.tfs_dio_read_block(block+pcb_data_block_root,buf);
   }
 
   private static void write_block(int block, byte buf[]) throws IOException
   {
-    TFSDiskInputOutput.tfs_dio_write_block(block,buf);
+    TFSDiskInputOutput.tfs_dio_write_block(block+pcb_data_block_root,buf);
   }
 
   private static void read_fd(FileD fd, byte buf[]) throws IOException {
@@ -517,7 +517,7 @@ public class TFSFileSystem
     int m = (fd.offset%BS+len+BS-1)/BS; // number of blocks to read
     ByteBuffer b = ByteBuffer.allocate(m*BS);
     byte tmp[] = new byte[BS];
-    
+
     // move to block of offset
     int offset_block = fd.block;
     for (int i = 0; i < fd.offset/BS; ++i) // it is okay if offset aligns with block
@@ -544,47 +544,52 @@ public class TFSFileSystem
 
     // update file pointer
     fd.offset += len;
-    
+
     // update size of file descriptor
     if (fd.offset > fd.size)
       fd.size = fd.offset;
-    
+
   }
 
   /*
    * File related - public methods
    */
-  
-  public static FileD[] read_root() throws IOException {
+
+  public static FileD root() throws IOException {
     int BS = TFSDiskInputOutput.BLOCK_SIZE;
-    FileD entries[];
-    
+
     // read root's first block and size
     ByteBuffer b = ByteBuffer.allocate(BS);
-    read_block(0,b.array());
-    b.position(22); 
+    read_block(fat[0],b.array());
+    b.position(22);
     int fblock = b.getInt();
     int fsize = b.getInt();
+
+    // root has no parent to update thus p, p_offset, p_size is 0
+    return new FileD(0,0,0,true,"",fblock,fsize);
+  }
+
+  public static FileD[] read_dir(FileD fd) throws IOException {
+    if (!fd.d) throw new TFSException(fd.name + "is not a directory");
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    FileD entries[];
+
+    int fblock = fd.block;
+    int fsize = fd.size;
     entries = new FileD[fsize/32];
 
     // read blocks into buffer
-    int ceil = (fsize+BS-1)/BS; // num blocks to read
-    b = ByteBuffer.allocate(ceil*BS);
-    byte tmp[] = new byte[BS];
-    for (int i = 0; i <  ceil; ++i){
-      read_block(fblock,tmp);
-      b.put(tmp);
-      fblock = fat[fblock];
-    }
+    fd.offset = 0;
+    ByteBuffer b = ByteBuffer.allocate(fsize);
+    
+    read_fd(fd,b.array());
 
     // read into entries array
-    b.position(0);
-    
     for (int i = 0; i < entries.length; ++i){
       int p = b.getInt();           // 4
       boolean d = (b.get() != 0);   // 5
       byte name[] = new byte[16];   // 21
-      b.get(name);                 
+      b.get(name);
       int nlength = b.get();        // 22
       int eblock = b.getInt();      // 26
       int esize = b.getInt();       // 30
@@ -597,15 +602,43 @@ public class TFSFileSystem
                              d,
                              new String(name,0,nlength),
                              eblock,
-                             0,
                              esize);
     }
     return entries;
-    
+  }
+
+
+
+  public static FileD[] read_path(String dir) throws IOException {
+    if (dir.length() == 0 || dir.charAt(0) != '/')
+      throw new TFSException("Invalid path: " + dir);
+    FileD[] cur = read_dir(root());
+    String names[] = dir.split("/");
+    for (int i = 1; i < names.length; ++i){
+      FileD next = null;
+      for (int j = 0 ; j < cur.length; ++j)
+        if (cur[j].name.equals(names[i])){
+          next = cur[j];
+          break;
+        }
+      if (next == null)
+        throw new IOException(dir + ": No such file or directory");
+      cur = read_dir(next);
+    }
+    return cur;
+  }
+
+  public static String[] read_path_names (String dir) throws IOException {
+    FileD[] entries = read_path(dir);
+    String names[] = new String[entries.length];
+    for (int i = 0; i < entries.length; ++i){
+      names[i] = (entries[i].d?"*":"")+entries[i].name;
+    }
+    return names;
   }
 
   /*
    * Misc.
    */
-  
+
 }
