@@ -3,8 +3,10 @@ import java.util.*;
 
 public class TFSShell extends Thread  
 {
+  String wdir; // working directory
   public TFSShell()
   {
+    wdir = "/";
   }
 	
   public void run()
@@ -68,7 +70,7 @@ public class TFSShell extends Thread
               ls(arg1);					
             }
             else
-              System.out.println("Usage: ls directory");
+              ls(wdir);
           }
           else if (cmd.equals("create")) {
             if (stokenizer.hasMoreTokens()) {
@@ -222,6 +224,7 @@ public class TFSShell extends Thread
 	
   void ls(String directory) throws IOException
   {
+    System.out.println(wdir);
     return;
   }
 	

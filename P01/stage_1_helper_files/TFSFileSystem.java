@@ -133,7 +133,7 @@ public class TFSFileSystem
   /***************************
    * File Descriptor Table   *
    ***************************/
-  private class FileD {
+  private static class FileD {
     int p; // beginning of block for entry
     int p_offset; // offset to entry from root
     int p_size; // size of parent
@@ -502,8 +502,8 @@ public class TFSFileSystem
       // move to last block
       int block = fd.block;
       for (int i = 0; i < (fd.size-1)/BS; ++i) // (a+b-1)/b - 1 => (a-1)/b
-        block = fat[block];
-      int c = free_ptr;
+        block = fat[block];                    // find block size resides on even if size
+      int c = free_ptr;                        // aligns with block size
       for (int i = 0; i < n-1 && c != -1; ++i){
         c = fat[c];
       }
@@ -514,7 +514,7 @@ public class TFSFileSystem
     }
 
     // read blocks to buffer
-    int m = (fd.offset%BS+length+BS-1)/BS; // number of blocks to read
+    int m = (fd.offset%BS+len+BS-1)/BS; // number of blocks to read
     ByteBuffer b = ByteBuffer.allocate(m*BS);
     byte tmp[] = new byte[BS];
     
@@ -538,7 +538,7 @@ public class TFSFileSystem
     block = offset_block;
     for (int i = 0; i < m; ++i){
       b.get(tmp,0,BS);
-      write_block(block);
+      write_block(block,tmp);
       block = fat[block];
     }
 
@@ -555,20 +555,57 @@ public class TFSFileSystem
    * File related - public methods
    */
   
-  
-  // public static FileD[] read_root() throws IOException {
-  //   int BS = TFSDiskInputOutput.BLOCK_SIZE;
-  //   ByteBuffer b = ByteBuffer.allocate(BS);
-  //   read_block(0,b.array());
-  //   b.position(22); 
-  //   int fblock = b.getInt();
-  //   int fsize = b.getInt();
-  //   b = ByteBuffer.allocate(((fsize+BS-1)/BS)*BS);
-  //   for (int i = 0; i < fsize/BS; ++i){
-  //     byte tmp[] = new byte[BS];
-  //     read_block(fblock,tmp);
-  //     fblock = fat[fblock];
-  //   }
-  // }
+  public static FileD[] read_root() throws IOException {
+    int BS = TFSDiskInputOutput.BLOCK_SIZE;
+    FileD entries[];
+    
+    // read root's first block and size
+    ByteBuffer b = ByteBuffer.allocate(BS);
+    read_block(0,b.array());
+    b.position(22); 
+    int fblock = b.getInt();
+    int fsize = b.getInt();
+    entries = new FileD[fsize/32];
+
+    // read blocks into buffer
+    int ceil = (fsize+BS-1)/BS; // num blocks to read
+    b = ByteBuffer.allocate(ceil*BS);
+    byte tmp[] = new byte[BS];
+    for (int i = 0; i <  ceil; ++i){
+      read_block(fblock,tmp);
+      b.put(tmp);
+      fblock = fat[fblock];
+    }
+
+    // read into entries array
+    b.position(0);
+    
+    for (int i = 0; i < entries.length; ++i){
+      int p = b.getInt();           // 4
+      boolean d = (b.get() != 0);   // 5
+      byte name[] = new byte[16];   // 21
+      b.get(name);                 
+      int nlength = b.get();        // 22
+      int eblock = b.getInt();      // 26
+      int esize = b.getInt();       // 30
+      b.get();
+      b.get();                      // 32
+
+      entries[i] = new FileD(p,
+                             i*32,
+                             fsize,
+                             d,
+                             new String(name,0,nlength),
+                             eblock,
+                             0,
+                             esize);
+    }
+    return entries;
+    
+  }
+
+  /*
+   * Misc.
+   */
   
 }
