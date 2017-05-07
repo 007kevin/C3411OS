@@ -499,27 +499,55 @@ public class TFSFileSystem
     // 2) watch for edge case when size aligns with block size
     int n = ((fd.offset+len+BS-1)/BS) - ((fd.size+BS-1)/BS);
     if (n > 0){
+      // move to last block
       int block = fd.block;
       for (int i = 0; i < (fd.size-1)/BS; ++i) // (a+b-1)/b - 1 => (a-1)/b
         block = fat[block];
       int c = free_ptr;
-      for (int i = 0; i < n-1; ++i){
-        c = fat[free_ptr];
+      for (int i = 0; i < n-1 && c != -1; ++i){
+        c = fat[c];
       }
+      if (c == -1) throw new TFSException("No space available, write aborted.");
       fat[block] = free_ptr;
       free_ptr = fat[c];
       fat[c] = -1;
     }
 
-    ByteBuffer b = ByteBuffer.allocate(((fd.offset%BS+length+BS-1)/BS)*BS);
+    // read blocks to buffer
+    int m = (fd.offset%BS+length+BS-1)/BS; // number of blocks to read
+    ByteBuffer b = ByteBuffer.allocate(m*BS);
+    byte tmp[] = new byte[BS];
+    
     // move to block of offset
-    int block = fd.block;
+    int offset_block = fd.block;
     for (int i = 0; i < fd.offset/BS; ++i) // it is okay if offset aligns with block
-      block = fat[block];
+      offset_block = fat[offset_block];
 
     // write data to buffer
-    for (int i = 0; i < fd.offset
+    int block = offset_block;
+    for (int i = 0; i < m; ++i){
+      read_block(block,tmp);
+      b.put(tmp);
+      block = fat[block];
+    }
+
+    b.position(fd.offset%BS);
+    b.put(buf,0,len);
+
+    // write data back to disk
+    block = offset_block;
+    for (int i = 0; i < m; ++i){
+      b.get(tmp,0,BS);
+      write_block(block);
+      block = fat[block];
+    }
+
+    // update file pointer
+    fd.offset += len;
     
+    // update size of file descriptor
+    if (fd.offset > fd.size)
+      fd.size = fd.offset;
     
   }
 
